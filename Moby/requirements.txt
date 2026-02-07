@@ -1,0 +1,26 @@
+#Package            Version
+#------------------ -----------
+alpaca-py           
+annotated-doc      
+annotated-types    
+anyio             
+certifi            
+charset-normalizer 
+fastapi            
+idna                           
+msgpack           
+numpy             
+pandas             
+pip             
+pydantic           
+pydantic_core     
+python-dateutil    
+requests          
+six               
+sseclient-py       
+starlette          
+typing_extensions  
+typing-inspection  
+tzdata             
+urllib3           
+websockets        

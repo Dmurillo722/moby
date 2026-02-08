@@ -4,6 +4,12 @@ I set up the backend project structure roughly going off this official fastapi e
 
 - Use core/config.py to set up any environment variables (database connection strings, environment name)
 
+- The api and postgresql are dockerized for local development. To run, cd to Backend
+  and run "docker compose up" (with --build tag if you've added dependencies or made major changes). Make sure to have docker desktop installed before doing this.
+  Once the container is running, you'll be able to access api documentation at http://localhost:8000/docs.
+
+- uv add ... for adding dependencies, uv package manager is faster than pip
+
 - Models folder is for defining ORM models to represent database objects in code. Schemas folder is for defining
   pydantic models to validate API header format, response format, etc. For now, maybe define everything in the models.py
   and schemas.py files and then we can break those out into multiple files if they get too big.

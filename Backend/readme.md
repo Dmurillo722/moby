@@ -43,7 +43,7 @@ These run in the api contaier to create a version file and apply it to the datab
 
 I set up the backend project structure roughly going off this official fastapi example project https://github.com/fastapi/full-stack-fastapi-template/tree/master/backend/app.
 
-Use core/config.py to set up any environment variables (database connection strings, environment name)
+- Use core/config.py to set up any environment variables (database connection strings, environment name)
 
 - Models folder is for defining ORM models to represent database objects in code. Schemas folder is for defining
   pydantic models to validate API header format, response format, etc.

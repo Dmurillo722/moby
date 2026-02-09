@@ -25,6 +25,8 @@
 
 10. To add new dependencies, use uv add package-name, then rebuild the containers with docker compose up --build.
 
+11. If you're having trouble logging into the database through psql, check what ports are being used on your pc and change the exposed port in compose.yaml to one that isn't occupied.
+    
 ## Changing Database Schema
 
 Changes to the database schema should be done by changing the models/models.py file, no sql required.

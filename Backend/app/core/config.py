@@ -9,9 +9,10 @@ class Settings(BaseSettings):
         env_ignore_empty = True,
     )
     ENVIRONMENT: Literal["local", "production"] = "local"
-    JWT_SECRET_KEY: str
-    DATABASE_URL: str
-    PROJECT_NAME: str
+    POSTGRES_USER: str
+    POSTGRES_PASSWORD: str
+    POSTGRES_DB: str
+    PROJECT_NAME: str = "Moby Backend"
     # use to define other environment config this is just an example for now
 
 settings = Settings()

@@ -1,1 +1,0 @@
-# for migrations if we want to do code-first versioned changes to the database schema

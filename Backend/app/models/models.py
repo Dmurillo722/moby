@@ -1,14 +1,14 @@
 from typing import Optional
 import datetime
 
-from sqlalchemy import Boolean, DateTime, Double, ForeignKeyConstraint, Index, Integer, PrimaryKeyConstraint, String, UniqueConstraint, text
+from sqlalchemy import Boolean, Numeric, DateTime, Double, ForeignKeyConstraint, Index, Integer, PrimaryKeyConstraint, String, UniqueConstraint, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 # Python code for ORM models generated directly from SQL using sqlacaodegen package
+# After changing this file, follow instructions for updating the schema through alembic
 
 class Base(DeclarativeBase):
     pass
-
 
 class Asset(Base):
     __tablename__ = 'asset'
@@ -24,7 +24,10 @@ class Asset(Base):
     alert: Mapped[list['Alert']] = relationship('Alert', back_populates='asset')
     market_data: Mapped[list['MarketData']] = relationship('MarketData', back_populates='asset')
     sentiment_data: Mapped[list['SentimentData']] = relationship('SentimentData', back_populates='asset')
-
+    financial_overview: Mapped['FinancialOverview'] = relationship(
+        'FinancialOverview',
+        back_populates='asset',
+        cascade="all, delete-orphan")
 
 class Users(Base):
     __tablename__ = 'users'
@@ -110,3 +113,53 @@ class AlertEventHistory(Base):
     sent: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, server_default=text('now()'))
 
     alert: Mapped['Alert'] = relationship('Alert', back_populates='alert_event_history')
+
+class FinancialOverview(Base):
+    __tablename__ = 'financial_overview'
+    __table_args__ = (
+        ForeignKeyConstraint(['asset_id'], ['asset.id'], ondelete='CASCADE', name='financial_overview_asset_id_fkey'),
+        PrimaryKeyConstraint('id', name='financial_overview_pkey')
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    asset_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    asset_symbol: Mapped[Optional[str]] = mapped_column(String(256))
+    total_revenue: Mapped[Optional[float]] = mapped_column(Numeric(20, 2))
+    revenue_growth: Mapped[Optional[float]] = mapped_column(Double(53))
+    gross_profit: Mapped[Optional[float]] = mapped_column(Numeric(20, 2))
+    operating_income: Mapped[Optional[float]] = mapped_column(Numeric(20, 2))
+    net_income: Mapped[Optional[float]] = mapped_column(Numeric(20, 2))
+    eps_basic: Mapped[Optional[float]] = mapped_column(Double(53))
+    eps_diluted: Mapped[Optional[float]] = mapped_column(Double(53))
+    total_shares: Mapped[Optional[float]] = mapped_column(Numeric(20, 2))
+    shares_float: Mapped[Optional[float]] = mapped_column(Numeric(20, 2))
+    total_assets: Mapped[Optional[float]] = mapped_column(Numeric(20, 2))
+    total_liabilities: Mapped[Optional[float]] = mapped_column(Numeric(20, 2))
+    total_equity: Mapped[Optional[float]] = mapped_column(Numeric(20, 2))
+    book_value_per_share: Mapped[Optional[float]] = mapped_column(Double(53))
+    current_ratio: Mapped[Optional[float]] = mapped_column(Double(53))
+    debt_to_equity: Mapped[Optional[float]] = mapped_column(Double(53))
+    asset_turnover: Mapped[Optional[float]] = mapped_column(Double(53))
+    asset: Mapped['Asset'] = relationship('Asset', back_populates='financial_overview')
+
+# example financial overview
+'''
+totalRevenue: '385.67B',
+    revenueGrowth: '29.41%',
+    grossProfit: '206.14B',
+    operatingIncome: '141.87B',
+    netIncome: '117.71B',
+    epsBasic: '7.60',
+    epsDiluted: '2.44',
+    totalShares: '14.65B',
+    sharesFloat: '14.67B',
+    balanceSheet: {
+      totalAssets: '378.30B',
+      totalLiabilities: '293.31B',
+      totalEquity: '85.17B',
+    },
+    bookValuePerShare: '6.00',
+    currentRatio: '0.97',
+    debtToEquity: '1.03',
+    assetTurnover: '1.20',
+'''

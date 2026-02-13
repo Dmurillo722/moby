@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from app.core.config import settings
 from app.core.database import init_db
 from contextlib import asynccontextmanager
+from app.api.main import api_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI): # initialize resources on application startup
@@ -19,5 +20,7 @@ app = FastAPI(
 @app.get("/health", tags=["health"])
 async def health_check():
     return {"status": "ok"}
+
+app.include_router(api_router)
 
 # Enable CORS, other middleware, etc.

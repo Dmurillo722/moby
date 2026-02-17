@@ -13,6 +13,8 @@ class Settings(BaseSettings):
     POSTGRES_PASSWORD: str
     POSTGRES_DB: str
     PROJECT_NAME: str = "Moby Backend"
+    ALPACA_API_KEY: str
+    ALPACA_API_SECRET: str
     # use to define other environment config this is just an example for now
 
 settings = Settings()

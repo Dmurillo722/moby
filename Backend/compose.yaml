@@ -7,13 +7,6 @@ services:
       - "8000:8000"
     volumes:
       - ./app:/app/app
-    depends_on:
-      - redis
-
-  redis:
-    image: redis:7
-    ports:
-      - "6379:6379"
 
   db:
     image: postgres:16

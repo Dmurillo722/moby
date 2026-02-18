@@ -5,7 +5,7 @@ class StreamProcessor():
     def __init__(self, logger, worker_count: int, queue: asyncio.Queue):
         self.logger = logger
         self.queue = queue
-        self.workers_count = worker_count
+        self.worker_count = worker_count
         self.workers = []
     
     async def start(self):
@@ -22,7 +22,7 @@ class StreamProcessor():
         while True:
             msg = await self.queue.get()
             try:
-                print(msg)
+                self.logger.info(f"Processor received message: {msg}")
                 # process(msg) # delegate to service logic, might want to implement batching here if it can't keep up
             finally:
                 self.queue.task_done()

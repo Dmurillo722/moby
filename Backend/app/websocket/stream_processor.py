@@ -1,44 +1,28 @@
 
-from redis.asyncio import Redis
-import redis
-import json
+import asyncio
 
 class StreamProcessor():
-    def __init__(self, logger, redis:Redis, stream_data):
+    def __init__(self, logger, worker_count: int, queue: asyncio.Queue):
         self.logger = logger
-        self.redis = redis
-        self.host = stream_data["redis_host"]
-        self.port = stream_data["redis_port"]
-        self.key = stream_data["stream_key"]
-        self.group_name = stream_data["group_name"]
-        self.consumer_name = stream_data["consumer_name"]
-
-    async def process_market_stream(self):
-        try:
-            await redis.xgroup_create(self.key, self.group_name, id="$", mkstream=True)
-        except:
-            pass
+        self.queue = queue
+        self.workers_count = worker_count
+        self.workers = []
     
-        self.logger.info("Redis consumer for stream processor started")
-        
-        while True:
-            resp = await self.redis.xreadgroup(
-                groupname = self.group_name,
-                consumername = self.consumer_name,
-                streams={self.key: ">"},
-                count=10,
-                block=5000
-            )
+    async def start(self):
+        self.workers = [asyncio.create_task(self.alapaca_processor_worker(i)) for i in range(self.worker_count)]
+        self.logger.info(f"Started stream workers")
+    
+    async def stop(self):
+        for task in self.workers:
+            task.cancel()
+        await asyncio.gather(*self.workers, return_exceptions=True, cancel_on_error=True)
+        self.logger.info("Processing stream workers stopped")
 
-            if not resp:
-                continue
-                
-            self.logger.info("Alpaca data read from redis stream by stream processor")
-            for stream_name, messages in resp:
-                for message_id, message_data in messages:
-                    data_json = message_data.get("data")
-                    if data_json:
-                        data = json.loads(data_json)
-                        self.logger.info(f"Redis stream [{message_id}] : {data}")
-                    # acknowledge
-                    await redis.xack(self.key, self.group_name, message_id)
+    async def alapaca_processor_worker(self, id):
+        while True:
+            msg = await self.queue.get()
+            try:
+                print(msg)
+                # process(msg) # delegate to service logic, might want to implement batching here if it can't keep up
+            finally:
+                self.queue.task_done()

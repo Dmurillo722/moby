@@ -9,7 +9,7 @@ class StreamProcessor():
         self.workers = []
     
     async def start(self):
-        self.workers = [asyncio.create_task(self.alapaca_processor_worker(i)) for i in range(self.workers_count)]
+        self.workers = [asyncio.create_task(self.alapaca_processor_worker(i)) for i in range(self.worker_count)]
         self.logger.info(f"Started stream workers")
     
     async def stop(self):

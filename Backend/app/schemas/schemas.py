@@ -51,10 +51,7 @@ class FinancialOverview(ResponseBase):
 
 class CreateAlert(PostBase):
     user_id: int
-    asset_symbol: str = Field(
-        None,
-        description="Ticker symbol (e.g. AAPL)"
-    )
+    asset_id: int
     alert_type: str = Field(
         None, 
         description="One of: price_above, price_below, sentiment_change"

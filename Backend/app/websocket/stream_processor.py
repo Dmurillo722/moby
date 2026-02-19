@@ -22,7 +22,8 @@ class StreamProcessor():
         while True:
             msg = await self.queue.get()
             try:
-                self.logger.info(f"Processor received message: {msg}")
+                #self.logger.info(f"Processor received message: {msg}")
+                pass
                 # process(msg) # delegate to service logic, might want to implement batching here if it can't keep up
             finally:
                 self.queue.task_done()

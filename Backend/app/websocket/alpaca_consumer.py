@@ -19,13 +19,7 @@ class AlpacaConsumer():
         self.logger.info("Connecting to Alpaca")
         try:
             async with websockets.connect(self.alpaca_stream_url) as ws:
-                self.logger.info("Here")
-                await ws.send(json.dumps({
-                    "action": "auth",
-                    "key": settings.ALPACA_API_KEY,
-                    "secret": settings.ALPACA_API_SECRET
-                }))
-                self.logger.info("Alpaca connection opened!")
+                await ws.send(json.dumps({"action": "auth", "key": settings.ALPACA_API_KEY, "secret": settings.ALPACA_API_SECRET}))
 
                 subscribe_message = {"action": "subscribe"}
                 if self.symbols_trades:
@@ -34,7 +28,6 @@ class AlpacaConsumer():
                     subscribe_message["quotes"] = self.symbols_quotes
                 if self.symbols_bars:
                     subscribe_message["bars"] = self.symbols_bars
-                subscribe_message['extended_hours'] = True
 
                 # subscribing to stream based on object values for trade symbols, quote symbols, bar symbols
                 await ws.send(json.dumps(subscribe_message))

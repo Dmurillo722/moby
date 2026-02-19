@@ -14,12 +14,12 @@ class Asset(Base):
     __tablename__ = 'asset'
     __table_args__ = (
         PrimaryKeyConstraint('id', name='asset_pkey'),
-        UniqueConstraint('symbol', name='asset_symbol_key'),
+        UniqueConstraint('symbol', 'id', name='asset_symbol_id_key'),
         Index('idx_asset_symbol', 'symbol')
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    symbol: Mapped[Optional[str]] = mapped_column(String(256))
+    symbol: Mapped[str] = mapped_column(String(256))
 
     alert: Mapped[list['Alert']] = relationship('Alert', back_populates='asset')
     market_data: Mapped[list['MarketData']] = relationship('MarketData', back_populates='asset')
@@ -50,20 +50,19 @@ class Users(Base):
 class Alert(Base):
     __tablename__ = 'alert'
     __table_args__ = (
-        ForeignKeyConstraint(['asset_id'], ['asset.id'], name='alert_asset_id_fkey'),
+        ForeignKeyConstraint(['asset_id', 'asset_symbol'], ['asset.id', 'asset.symbol'], name='alert_asset_id_symbol_fkey'),
         ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE', name='alert_user_id_fkey'),
         PrimaryKeyConstraint('id', name='alert_pkey')
     )
-
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int] = mapped_column(Integer, nullable=False)
     asset_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    asset_symbol: Mapped[str] = mapped_column(String(256))
     alert_type: Mapped[str] = mapped_column(String(256), nullable=False)
     email: Mapped[bool] = mapped_column(Boolean, nullable=False)
     sms: Mapped[bool] = mapped_column(Boolean, nullable=False)
     created_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, server_default=text('now()'))
     threshold: Mapped[Optional[float]] = mapped_column(Double(53))
-
     asset: Mapped['Asset'] = relationship('Asset', back_populates='alert')
     user: Mapped['Users'] = relationship('Users', back_populates='alert')
     alert_event_history: Mapped[list['AlertEventHistory']] = relationship('AlertEventHistory', back_populates='alert')
@@ -97,7 +96,7 @@ class SentimentData(Base):
     asset_id: Mapped[int] = mapped_column(Integer, nullable=False)
     sentiment_rating: Mapped[int] = mapped_column(Integer, nullable=False)
     time: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, server_default=text('now()'))
-
+    
     asset: Mapped['Asset'] = relationship('Asset', back_populates='sentiment_data')
 
 
@@ -110,8 +109,8 @@ class AlertEventHistory(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     alert_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    reason: Mapped[str] = mapped_column(String(256), nullable=False)
     sent: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, server_default=text('now()'))
-
     alert: Mapped['Alert'] = relationship('Alert', back_populates='alert_event_history')
 
 class FinancialOverview(Base):

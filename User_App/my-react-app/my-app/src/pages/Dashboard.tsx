@@ -13,14 +13,12 @@ import { Button } from '@/components/ui/Button';
 import { ExternalLink, TrendingUp, TrendingDown } from 'lucide-react';
 
 const Dashboard = () => {
-  // Mock data for recent alerts
   const recentAlerts = [
     { id: 1, time: '10:23 AM', symbol: 'AAPL', type: 'Price', confidence: 'High', change: '+2.3%' },
     { id: 2, time: '09:45 AM', symbol: 'TSLA', type: 'Volume', confidence: 'Medium', change: '+15.2%' },
     { id: 3, time: '09:12 AM', symbol: 'MSFT', type: 'Price', confidence: 'High', change: '-1.1%' },
   ];
 
-  // Mock data for watched symbols
   const watchedSymbols = [
     { symbol: 'AAPL', lastPrice: 178.23, volume: '52.3M', change: 2.3, changePercent: 1.31 },
     { symbol: 'TSLA', lastPrice: 242.84, volume: '98.7M', change: -3.21, changePercent: -1.30 },
@@ -28,7 +26,6 @@ const Dashboard = () => {
     { symbol: 'GOOGL', lastPrice: 142.33, volume: '31.4M', change: 1.23, changePercent: 0.87 },
   ];
 
-  // Mock news data
   const dailyNews = [
     { 
       title: 'Fed Signals Potential Rate Cuts in 2026', 
@@ -58,16 +55,12 @@ const Dashboard = () => {
 
   return (
     <div className="space-y-6">
-      {/* Page header */}
       <div>
         <h1 className="text-3xl font-bold tracking-tight text-foreground">Dashboard</h1>
       </div>
 
-      {/* Main grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left column - 2/3 width */}
         <div className="lg:col-span-2 space-y-6">
-          {/* Recent Alert */}
           <Card className="border-border">
             <CardHeader className="border-b border-border bg-card">
               <CardTitle className="text-lg font-semibold text-foreground">Recent Alert</CardTitle>
@@ -124,7 +117,6 @@ const Dashboard = () => {
             </CardContent>
           </Card>
 
-          {/* Watched Symbols Activity */}
           <Card className="border-border">
             <CardHeader className="border-b border-border bg-card">
               <CardTitle className="text-lg font-semibold text-foreground">Watched Symbols Activity</CardTitle>
@@ -162,9 +154,7 @@ const Dashboard = () => {
           </Card>
         </div>
 
-        {/* Right column - 1/3 width */}
         <div className="space-y-6">
-          {/* Daily News */}
           <Card className="border-border">
             <CardHeader className="border-b border-border bg-card">
               <CardTitle className="text-lg font-semibold text-foreground">Daily News</CardTitle>

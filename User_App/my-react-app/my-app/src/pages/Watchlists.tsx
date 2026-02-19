@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { 
   Table,
@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { X, Info, TrendingUp, TrendingDown } from 'lucide-react';
 
+// graph
 const TradingViewWidget = ({ symbol }: { symbol: string }) => {
   useEffect(() => {
     const script = document.createElement('script');
@@ -49,6 +50,7 @@ const TradingViewWidget = ({ symbol }: { symbol: string }) => {
   return <div id="tradingview_chart" className="w-full h-[400px]" />;
 };
 
+// ticker
 const MiniChartWidget = ({ symbol }: { symbol: string }) => {
   useEffect(() => {
     const container = document.getElementById(`minichart_${symbol}`);
@@ -77,6 +79,35 @@ const MiniChartWidget = ({ symbol }: { symbol: string }) => {
 
   return <div id={`minichart_${symbol}`} className="w-full h-[100px]" />;
 };
+
+//fin data
+function FinData({ symbol }: { symbol: string }) {
+
+  useEffect(
+    () => {
+      const container = document.getElementById(`financials_${symbol}`);
+      if(container){
+      container.innerHTML = '';
+      const script = document.createElement("script");
+      script.src = "https://s3.tradingview.com/external-embedding/embed-widget-financials.js";
+      script.type = "text/javascript";
+      script.async = true;
+      script.innerHTML = JSON.stringify({
+          colorTheme: 'dark',
+          displayMode: 'regular',
+          isTransparent: true,
+          locale: 'en',
+          width: '100%',
+          height: '200px'
+        });
+      container?.appendChild(script);
+      }
+    },[symbol]
+  );
+
+  return <div id={`financials_${symbol}`} className="w-full min-h-[600px]" />;
+
+}
 
 const Watchlists = () => {
   const [symbols, setSymbols] = useState([
@@ -283,30 +314,7 @@ const Watchlists = () => {
           {selectedSymbol && (
             <>
               <Card className="border-border">
-                <CardContent className="p-6">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <div className="flex items-center gap-3">
-                        <h2 className="text-2xl font-bold text-foreground">{selectedSymbol.symbol}</h2>
-                        <Badge variant="outline" className="bg-muted/50 border-border text-muted-foreground">
-                          {selectedSymbol.name}
-                        </Badge>
-                      </div>
-                      <div className="mt-3 flex items-baseline gap-3">
-                        <span className="text-4xl font-bold text-foreground font-mono">
-                          ${selectedSymbol.price.toFixed(2)}
-                        </span>
-                        <div className={`flex items-center gap-1.5 text-lg font-semibold ${
-                          selectedSymbol.change > 0 ? 'text-emerald-500' : 'text-red-500'
-                        }`}>
-                          {selectedSymbol.change > 0 ? <TrendingUp className="w-5 h-5" /> : <TrendingDown className="w-5 h-5" />}
-                          <span>{selectedSymbol.change > 0 ? '+' : ''}{selectedSymbol.changePercent.toFixed(2)}%</span>
-                          <span className="text-sm">({selectedSymbol.change > 0 ? '+' : ''}{selectedSymbol.change.toFixed(2)})</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
+                <MiniChartWidget symbol={selectedSymbol.symbol}/>
               </Card>
 
               <Card className="border-border">
@@ -322,68 +330,10 @@ const Watchlists = () => {
                 <CardHeader className="border-b border-border bg-card">
                   <CardTitle className="text-lg font-semibold text-foreground">{selectedSymbol.symbol} Financials</CardTitle>
                 </CardHeader>
-                <CardContent className="p-6">
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
-                    <div className="space-y-3">
-                      <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Income on Q...</h3>
-                      <div className="space-y-2">
-                        <DataRow label="Total revenue" value={financialData?.totalRevenue} />
-                        <DataRow label="Revenue growth" value={financialData?.revenueGrowth} />
-                        <DataRow label="Gross profit" value={financialData?.grossProfit} />
-                        <DataRow label="Operating inc..." value={financialData?.operatingIncome} />
-                        <DataRow label="Net Income L..." value={financialData?.netIncome} />
-                      </div>
-                    </div>
-
-                    <div className="space-y-3">
-                      <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Return on Val...</h3>
-                      <div className="space-y-2">
-                        <DataRow label="EPS (Basic) (T...)" value={financialData?.epsBasic} />
-                        <DataRow label="EPS Diluted (E...)" value={financialData?.epsDiluted} />
-                        <DataRow label="Total shares (...)" value={financialData?.totalShares} />
-                        <DataRow label="Shares Float" value={financialData?.sharesFloat} />
-                      </div>
-                    </div>
-
-                    <div className="space-y-3">
-                      <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Dividends</h3>
-                      <div className="space-y-2">
-                        <DataRow label="Total assets (..." value={financialData?.balanceSheet.totalAssets} />
-                        <DataRow label="Total liabilitit..." value={financialData?.balanceSheet.totalLiabilities} />
-                        <DataRow label="Total equity (..." value={financialData?.balanceSheet.totalEquity} />
-                      </div>
-                    </div>
-
-                    <div className="space-y-3">
-                      <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Most payem...</h3>
-                      <div className="space-y-2">
-                        <DataRow label="Book value pe..." value={financialData?.bookValuePerShare} />
-                        <DataRow label="Current ratio (...)" value={financialData?.currentRatio} />
-                        <DataRow label="Debt to equity..." value={financialData?.debtToEquity} />
-                        <DataRow label="Asset turnover..." value={financialData?.assetTurnover} />
-                      </div>
-                    </div>
-
-                    <div className="space-y-3">
-                      <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">1 year Dom...</h3>
-                      <div className="space-y-2">
-                        <DataRow label="52 Week high" value="283.85" />
-                        <DataRow label="52 Week low" value="164.21" />
-                        <DataRow label="1 Year beta" value="1.32" />
-                        <DataRow label="Average volum..." value="63.87M" />
-                      </div>
-                    </div>
-
-                    <div className="space-y-3">
-                      <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Sentiment O...</h3>
-                      <div className="space-y-2">
-                        <DataRow label="Dividend yield..." value="0.32%" />
-                        <DataRow label="Dividend paym..." value="13.05%" />
-                        <DataRow label="Next payment..." value="2026-02-09" />
-                      </div>
-                    </div>
-                  </div>
+                <CardContent className="p-4">
+                  <FinData symbol={selectedSymbol.symbol}/>
                 </CardContent>
+                
               </Card>
             </>
           )}

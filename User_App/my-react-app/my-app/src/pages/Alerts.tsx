@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { 
   Table,
@@ -11,6 +11,29 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ExternalLink, TrendingUp, TrendingDown, Activity } from 'lucide-react';
+
+function FinancialOverview({ symbol }) {
+  const [data, setData] = useState(null);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    fetch(`http://localhost:8000/alerts/user_alerts/${symbol}`)
+      .then(res => {
+        if (!res.ok) throw new Error("Not found");
+        return res.json();
+      })
+      .then(setData)
+      .catch(setError);
+  }, [symbol]);
+
+  return (
+    <div>
+      <h2>{data?.asset_symbol}</h2>
+      <p>Revenue: {data?.revenue}</p>
+      <p>Net Income: {data?.net_income}</p>
+    </div>
+  );
+}
 
 const VolumeActivityChart = ({ data }: { data: any[] }) => {
   const maxVolume = Math.max(...data.map(d => d.volume));

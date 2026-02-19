@@ -7,7 +7,7 @@ from app.core.database import get_db
 from app.schemas.schemas import FinancialOverview as FinancialOverviewSchema
 from app.models.models import FinancialOverview as FinancialOverviewORM
 
-router = APIRouter(prefix="/finances", tags=["items"])
+router = APIRouter(prefix="/finances", tags=["finances"])
 
 @router.get("/financial_overview/{asset_symbol}", response_model=FinancialOverviewSchema)
 async def read_item(asset_symbol: str, db: AsyncSession = Depends(get_db)) -> Any:

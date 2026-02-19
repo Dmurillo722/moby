@@ -6,6 +6,12 @@ from pydantic import BaseModel, ConfigDict, Field
 from typing import Optional
 from decimal import Decimal
 
+class PostBase(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid", # not allowing extra fields to come into the schema
+        from_attributes=True 
+    )
+
 class ResponseBase(BaseModel):
     model_config = ConfigDict(
         extra="forbid", # not allowing extra fields to come into the schema
@@ -42,3 +48,18 @@ class FinancialOverview(ResponseBase):
     current_ratio: Optional[float]
     debt_to_equity: Optional[float]
     asset_turnover: Optional[float]
+
+class CreateAlert(PostBase):
+    user_id: int
+    asset_symbol: str = Field(
+        None,
+        description="Ticker symbol (e.g. AAPL)"
+    )
+    alert_type: str = Field(
+        None, 
+        description="One of: price_above, price_below, sentiment_change"
+    )
+    email: bool
+    sms: bool
+    threshold: int
+

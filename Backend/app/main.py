@@ -45,7 +45,6 @@ async def lifespan(app: FastAPI):
 
     finally:
         logger.info("Shutting Down")
-        alpaca_consumer.stop()
         consumer_task.cancel()
         await stream_processor.stop()
 

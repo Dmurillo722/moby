@@ -3,7 +3,7 @@
 venv/
 
 #Api Keys
-api_keys.py/
+api_keys.py
 
 # Python cache
 __pycache__/

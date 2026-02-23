@@ -1,4 +1,4 @@
-import React from 'react';
+import React , {useEffect,useState}from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { 
   Table,
@@ -10,6 +10,8 @@ import {
 } from '@/components/ui/Table';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
+import { getStockNews } from '@/endpoint_connections/news_endpoint';
+
 import { ExternalLink, TrendingUp, TrendingDown } from 'lucide-react';
 
 const Dashboard = () => {
@@ -52,6 +54,18 @@ const Dashboard = () => {
       url: '#'
     },
   ];
+
+  useEffect(() => {
+  async function load() {
+    const news = await getStockNews("AAPL");
+    console.log(news);
+  }
+
+    load();
+  }, []);
+
+
+
 
   return (
     <div className="space-y-6">
@@ -154,12 +168,15 @@ const Dashboard = () => {
           </Card>
         </div>
 
+
+
         <div className="space-y-6">
           <Card className="border-border">
             <CardHeader className="border-b border-border bg-card">
               <CardTitle className="text-lg font-semibold text-foreground">Daily News</CardTitle>
             </CardHeader>
             <CardContent className="p-4">
+              
               <div className="space-y-4">
                 {dailyNews.map((news, index) => (
                   <div 

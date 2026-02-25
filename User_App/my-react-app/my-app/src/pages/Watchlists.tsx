@@ -1,189 +1,226 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { 
+import React, { useEffect, useRef, useState } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
   Table,
   TableBody,
   TableCell,
   TableHead,
   TableHeader,
   TableRow,
-} from '@/components/ui/table';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { X, Info, TrendingUp, TrendingDown } from 'lucide-react';
+} from "@/components/ui/table";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { X, Info } from "lucide-react";
 
-// graph
-const TradingViewWidget = ({ symbol }: { symbol: string }) => {
+declare global {
+  interface Window {
+    TradingView?: any;
+  }
+}
+
+
+function useTradingViewEmbed(
+  containerRef: React.RefObject<HTMLDivElement>,
+  scriptSrc: string,
+  config: Record<string, any>,
+  deps: any[]
+) {
   useEffect(() => {
-    const script = document.createElement('script');
-    script.src = 'https://s3.tradingview.com/tv.js';
+    const container = containerRef.current;
+    if (!container) return;
+
+    let widget = container.querySelector<HTMLDivElement>(
+      ".tradingview-widget-container__widget"
+    );
+    if (!widget) {
+      widget = document.createElement("div");
+      widget.className = "tradingview-widget-container__widget";
+      container.appendChild(widget);
+    }
+
+    widget.innerHTML = "";
+    container.querySelectorAll("script").forEach((s) => s.remove());
+
+    const script = document.createElement("script");
+    script.src = scriptSrc;
     script.async = true;
-    script.onload = () => {
-      if (typeof window.TradingView !== 'undefined') {
-        new window.TradingView.widget({
-          autosize: true,
-          symbol: symbol,
-          interval: 'D',
-          timezone: 'Etc/UTC',
-          theme: 'dark',
-          style: '1',
-          locale: 'en',
-          toolbar_bg: '#0a0e14',
-          enable_publishing: false,
-          hide_side_toolbar: false,
-          allow_symbol_change: true,
-          container_id: 'tradingview_chart',
-          height: 400,
-        });
-      }
-    };
-    document.head.appendChild(script);
+    script.type = "text/javascript";
+    script.innerHTML = JSON.stringify(config);
+    container.appendChild(script);
 
     return () => {
-      const existingScript = document.querySelector('script[src="https://s3.tradingview.com/tv.js"]');
-      if (existingScript) {
-        document.head.removeChild(existingScript);
-      }
+      // Cleanup
+      widget?.replaceChildren();
+      container.querySelectorAll("script").forEach((s) => s.remove());
     };
-  }, [symbol]);
+  }, deps);
+}
 
-  return <div id="tradingview_chart" className="w-full h-[400px]" />;
-};
+const TradingViewWidget = ({ symbol }: { symbol: string }) => {
+  const containerIdRef = useRef(`tradingview_chart_${Math.random().toString(36).slice(2)}`);
+  const scriptLoadedRef = useRef(false);
 
-// ticker
-const MiniChartWidget = ({ symbol }: { symbol: string }) => {
   useEffect(() => {
-    const container = document.getElementById(`minichart_${symbol}`);
-    if (container) {
-      container.innerHTML = '';
-      const script = document.createElement('script');
-      script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-mini-symbol-overview.js';
-      script.async = true;
-      script.innerHTML = JSON.stringify({
-        symbol: symbol,
-        width: '100%',
-        height: '100%',
-        locale: 'en',
-        dateRange: '12M',
-        colorTheme: 'dark',
-        trendLineColor: 'rgba(6, 182, 212, 1)',
-        underLineColor: 'rgba(6, 182, 212, 0.3)',
-        underLineBottomColor: 'rgba(6, 182, 212, 0)',
-        isTransparent: true,
+    const containerId = containerIdRef.current;
+    const tvSymbol = symbol.includes(":") ? symbol : `NASDAQ:${symbol}`;
+
+    const container = document.getElementById(containerId);
+    if (container) container.innerHTML = "";
+
+    const init = () => {
+      if (!window.TradingView) return;
+      new window.TradingView.widget({
         autosize: true,
-        largeChartUrl: '',
+        symbol: tvSymbol,
+        interval: "D",
+        timezone: "Etc/UTC",
+        theme: "dark",
+        style: "1",
+        locale: "en",
+        enable_publishing: false,
+        hide_side_toolbar: false,
+        allow_symbol_change: true,
+        container_id: containerId,
+        height: 400,
       });
-      container.appendChild(script);
+    };
+
+    if (!scriptLoadedRef.current) {
+      const existing = document.querySelector(
+        'script[src="https://s3.tradingview.com/tv.js"]'
+      );
+      if (existing) {
+        scriptLoadedRef.current = true;
+        init();
+        return;
+      }
+
+      const script = document.createElement("script");
+      script.src = "https://s3.tradingview.com/tv.js";
+      script.async = true;
+      script.onload = () => {
+        scriptLoadedRef.current = true;
+        init();
+      };
+      document.head.appendChild(script);
+    } else {
+      init();
     }
   }, [symbol]);
 
-  return <div id={`minichart_${symbol}`} className="w-full h-[100px]" />;
+  return <div id={containerIdRef.current} className="w-full h-[400px]" />;
 };
 
-//fin data
-function FinData({ symbol }: { symbol: string }) {
+/** 2) TradingView mini symbol overview (external-embedding) */
+const MiniChartWidget = ({ symbol }: { symbol: string }) => {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const tvSymbol = symbol.includes(":") ? symbol : `NASDAQ:${symbol}`;
 
-  useEffect(
-    () => {
-      const container = document.getElementById(`financials_${symbol}`);
-      if(container){
-      container.innerHTML = '';
-      const script = document.createElement("script");
-      script.src = "https://s3.tradingview.com/external-embedding/embed-widget-financials.js";
-      script.type = "text/javascript";
-      script.async = true;
-      script.innerHTML = JSON.stringify({
-          colorTheme: 'dark',
-          displayMode: 'regular',
-          isTransparent: true,
-          locale: 'en',
-          width: '100%',
-          height: '200px'
-        });
-      container?.appendChild(script);
-      }
-    },[symbol]
+  useTradingViewEmbed(
+    containerRef,
+    "https://s3.tradingview.com/external-embedding/embed-widget-mini-symbol-overview.js",
+    {
+      symbol: tvSymbol,
+      width: "100%",
+      height: "100%",
+      locale: "en",
+      dateRange: "12M",
+      colorTheme: "dark",
+      isTransparent: true,
+      autosize: true,
+      largeChartUrl: "",
+    },
+    [tvSymbol]
   );
 
-  return <div id={`financials_${symbol}`} className="w-full min-h-[600px]" />;
+  return (
+    <div
+      ref={containerRef}
+      className="tradingview-widget-container w-full h-[100px]"
+    />
+  );
+};
 
-}
+const FinData = ({ symbol }: { symbol: string }) => {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const tvSymbol = symbol.includes(":") ? symbol : `NASDAQ:${symbol}`;
+
+  useTradingViewEmbed(
+    containerRef,
+    "https://s3.tradingview.com/external-embedding/embed-widget-financials.js",
+    {
+      symbol: tvSymbol,
+      colorTheme: "dark",
+      displayMode: "regular",
+      isTransparent: true,
+      locale: "en",
+      width: "100%",
+      height: 600,
+    },
+    [tvSymbol]
+  );
+
+  return (
+    <div
+      ref={containerRef}
+      className="tradingview-widget-container w-full min-h-[600px]"
+    />
+  );
+};
 
 const Watchlists = () => {
   const [symbols, setSymbols] = useState([
-    { symbol: 'AAPL', name: 'Apple Inc.', price: 178.23, change: 2.3, changePercent: 1.31, volume: '52.3M' },
+    { symbol: "AAPL", name: "Apple Inc.", price: 178.23, change: 2.3, changePercent: 1.31, volume: "52.3M" },
   ]);
   const [selectedSymbol, setSelectedSymbol] = useState(symbols[0]);
-  const [newSymbol, setNewSymbol] = useState('');
-  const [searchSymbol, setSearchSymbol] = useState('');
+  const [newSymbol, setNewSymbol] = useState("");
+  const [searchSymbol, setSearchSymbol] = useState("");
   const [searchResult, setSearchResult] = useState<any>(null);
 
-  const getFinancialData = (symbol: string) => ({
-    totalRevenue: '385.67B',
-    revenueGrowth: '29.41%',
-    grossProfit: '206.14B',
-    operatingIncome: '141.87B',
-    netIncome: '117.71B',
-    epsBasic: '7.60',
-    epsDiluted: '2.44',
-    totalShares: '14.65B',
-    sharesFloat: '14.67B',
-    balanceSheet: {
-      totalAssets: '378.30B',
-      totalLiabilities: '293.31B',
-      totalEquity: '85.17B',
-    },
-    bookValuePerShare: '6.00',
-    currentRatio: '0.97',
-    debtToEquity: '1.03',
-    assetTurnover: '1.20',
-  });
-
-  const financialData = selectedSymbol ? getFinancialData(selectedSymbol.symbol) : null;
-
   const searchForSymbol = () => {
-    if (searchSymbol.trim()) {
-      const symbol = searchSymbol.trim().toUpperCase();
-      const mockResult = {
-        symbol,
-        name: `${symbol} Company`,
-        price: Math.random() * 500 + 50,
-        change: (Math.random() - 0.5) * 10,
-        changePercent: (Math.random() - 0.5) * 5,
-        volume: `${(Math.random() * 100 + 10).toFixed(1)}M`,
-      };
-      setSearchResult(mockResult);
-      setSelectedSymbol(mockResult);
-    }
+    if (!searchSymbol.trim()) return;
+    const symbol = searchSymbol.trim().toUpperCase();
+    const mockResult = {
+      symbol,
+      name: `${symbol} Company`,
+      price: Math.random() * 500 + 50,
+      change: (Math.random() - 0.5) * 10,
+      changePercent: (Math.random() - 0.5) * 5,
+      volume: `${(Math.random() * 100 + 10).toFixed(1)}M`,
+    };
+    setSearchResult(mockResult);
+    setSelectedSymbol(mockResult);
   };
 
   const addSymbol = () => {
-    if (newSymbol.trim() && !symbols.find(s => s.symbol === newSymbol.trim().toUpperCase())) {
-      const symbol = newSymbol.trim().toUpperCase();
-      const newEntry = {
-        symbol,
-        name: `${symbol} Company`,
-        price: Math.random() * 500 + 50,
-        change: (Math.random() - 0.5) * 10,
-        changePercent: (Math.random() - 0.5) * 5,
-        volume: `${(Math.random() * 100 + 10).toFixed(1)}M`,
-      };
-      setSymbols([...symbols, newEntry]);
-      setSelectedSymbol(newEntry);
-      setNewSymbol('');
-    }
+    const sym = newSymbol.trim().toUpperCase();
+    if (!sym) return;
+    if (symbols.find((s) => s.symbol === sym)) return;
+
+    const newEntry = {
+      symbol: sym,
+      name: `${sym} Company`,
+      price: Math.random() * 500 + 50,
+      change: (Math.random() - 0.5) * 10,
+      changePercent: (Math.random() - 0.5) * 5,
+      volume: `${(Math.random() * 100 + 10).toFixed(1)}M`,
+    };
+
+    setSymbols((prev) => [...prev, newEntry]);
+    setSelectedSymbol(newEntry);
+    setNewSymbol("");
   };
 
   const addSearchedSymbol = () => {
-    if (searchResult && !symbols.find(s => s.symbol === searchResult.symbol)) {
-      setSymbols([...symbols, searchResult]);
-      setSearchResult(null);
-      setSearchSymbol('');
-    }
+    if (!searchResult) return;
+    if (symbols.find((s) => s.symbol === searchResult.symbol)) return;
+    setSymbols((prev) => [...prev, searchResult]);
+    setSearchResult(null);
+    setSearchSymbol("");
   };
 
   const removeSymbol = (symbol: string) => {
-    const filtered = symbols.filter(s => s.symbol !== symbol);
+    const filtered = symbols.filter((s) => s.symbol !== symbol);
     setSymbols(filtered);
     if (selectedSymbol?.symbol === symbol && filtered.length > 0) {
       setSelectedSymbol(filtered[0]);
@@ -210,13 +247,18 @@ const Watchlists = () => {
                     placeholder="Search TSLA, GOOGL..."
                     value={searchSymbol}
                     onChange={(e) => setSearchSymbol(e.target.value)}
-                    onKeyPress={(e) => e.key === 'Enter' && searchForSymbol()}
+                    onKeyDown={(e) => e.key === "Enter" && searchForSymbol()}
                     className="flex-1 px-3 py-2 bg-muted/50 border border-border rounded-md text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                   />
-                  <Button onClick={searchForSymbol} variant="secondary" className="bg-secondary text-secondary-foreground hover:bg-secondary/80">
+                  <Button
+                    onClick={searchForSymbol}
+                    variant="secondary"
+                    className="bg-secondary text-secondary-foreground hover:bg-secondary/80"
+                  >
                     Search
                   </Button>
                 </div>
+
                 {searchResult && (
                   <div className="p-3 bg-accent/30 rounded-lg border border-border">
                     <div className="flex items-center justify-between mb-2">
@@ -226,13 +268,13 @@ const Watchlists = () => {
                       </Badge>
                     </div>
                     <div className="text-sm text-muted-foreground mb-3">{searchResult.name}</div>
-                    <Button 
-                      onClick={addSearchedSymbol} 
-                      size="sm" 
+                    <Button
+                      onClick={addSearchedSymbol}
+                      size="sm"
                       className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
-                      disabled={symbols.some(s => s.symbol === searchResult.symbol)}
+                      disabled={symbols.some((s) => s.symbol === searchResult.symbol)}
                     >
-                      {symbols.some(s => s.symbol === searchResult.symbol) ? 'Already Added' : 'Add to Watchlist'}
+                      {symbols.some((s) => s.symbol === searchResult.symbol) ? "Already Added" : "Add to Watchlist"}
                     </Button>
                   </div>
                 )}
@@ -251,7 +293,7 @@ const Watchlists = () => {
                   placeholder="AAPL"
                   value={newSymbol}
                   onChange={(e) => setNewSymbol(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && addSymbol()}
+                  onKeyDown={(e) => e.key === "Enter" && addSymbol()}
                   className="flex-1 px-3 py-2 bg-muted/50 border border-border rounded-md text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                 />
                 <Button onClick={addSymbol} className="bg-primary text-primary-foreground hover:bg-primary/90">
@@ -273,15 +315,13 @@ const Watchlists = () => {
                 </TableHeader>
                 <TableBody>
                   {symbols.map((stock) => (
-                    <TableRow 
-                      key={stock.symbol} 
+                    <TableRow
+                      key={stock.symbol}
                       className={`hover:bg-accent/50 transition-colors border-border cursor-pointer ${
-                        selectedSymbol?.symbol === stock.symbol ? 'bg-accent/30' : ''
+                        selectedSymbol?.symbol === stock.symbol ? "bg-accent/30" : ""
                       }`}
                     >
-                      <TableCell className="font-semibold text-foreground">
-                        {stock.symbol}
-                      </TableCell>
+                      <TableCell className="font-semibold text-foreground">{stock.symbol}</TableCell>
                       <TableCell>
                         <Button
                           variant="ghost"
@@ -314,7 +354,7 @@ const Watchlists = () => {
           {selectedSymbol && (
             <>
               <Card className="border-border">
-                <MiniChartWidget symbol={selectedSymbol.symbol}/>
+                <MiniChartWidget symbol={selectedSymbol.symbol} />
               </Card>
 
               <Card className="border-border">
@@ -328,12 +368,13 @@ const Watchlists = () => {
 
               <Card className="border-border">
                 <CardHeader className="border-b border-border bg-card">
-                  <CardTitle className="text-lg font-semibold text-foreground">{selectedSymbol.symbol} Financials</CardTitle>
+                  <CardTitle className="text-lg font-semibold text-foreground">
+                    {selectedSymbol.symbol} Financials
+                  </CardTitle>
                 </CardHeader>
                 <CardContent className="p-4">
-                  <FinData symbol={selectedSymbol.symbol}/>
+                  <FinData symbol={selectedSymbol.symbol} />
                 </CardContent>
-                
               </Card>
             </>
           )}
@@ -342,12 +383,5 @@ const Watchlists = () => {
     </div>
   );
 };
-
-const DataRow = ({ label, value }: { label: string; value: string | undefined }) => (
-  <div className="flex justify-between items-center">
-    <span className="text-sm text-muted-foreground">{label}</span>
-    <span className="text-sm font-medium text-foreground font-mono">{value}</span>
-  </div>
-);
 
 export default Watchlists;

@@ -48,3 +48,44 @@ async def read_news(asset_symbol: str) -> Any:
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/market/{category}")
+async def read_market_news(category: str = "general"):
+    """
+    Get Market News from Finnhub
+
+    Categories:
+    - general
+    - forex
+    - crypto
+    - merger
+    """
+    token = os.getenv("FINNHUB_API_KEY")
+    if not token:
+        raise HTTPException(status_code=500, detail="Finnhub API key not set")
+
+    base_url = "https://finnhub.io/api/v1/news"
+
+    params = {
+        "category": category.lower(),
+        "token": token,
+    }
+
+    url = f"{base_url}?{urllib.parse.urlencode(params)}"
+
+    try:
+        with urllib.request.urlopen(url) as response:
+            if response.status != 200:
+                raise HTTPException(
+                    status_code=response.status,
+                    detail=response.read().decode()
+                )
+
+            data = response.read()
+            return json.loads(data)
+
+    except urllib.error.HTTPError as e:
+        raise HTTPException(status_code=e.code, detail=e.reason)
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

@@ -14,11 +14,12 @@ import { getStockNews, getMarketNews } from "@/endpoint_connections/news_endpoin
 import { getInsiderSentiment } from "@/endpoint_connections/sentiment_endpoint";
 import { ExternalLink, TrendingUp, TrendingDown } from "lucide-react";
 
+
 type MarketNewsItem = {
   headline?: string;
   source?: string;
   url?: string;
-  datetime?: number; // unix seconds
+  datetime?: number;
   summary?: string;
 };
 
@@ -26,7 +27,7 @@ type CompanyNewsItem = {
   headline?: string;
   source?: string;
   url?: string;
-  datetime?: number; // unix seconds
+  datetime?: number; 
   summary?: string;
 };
 
@@ -34,7 +35,7 @@ type InsiderSentimentResponse = {
   symbol?: string;
   data?: Array<{
     month?: string;
-    mspr?: number; // monthly share purchase ratio
+    mspr?: number;
     change?: number;
   }>;
 };
@@ -51,6 +52,9 @@ function timeAgoFromUnixSeconds(unix?: number) {
   return `${days}d ago`;
 }
 
+const companyNewsCache = new Map<string, CompanyNewsItem[]>();
+const sentimentCache = new Map<string, InsiderSentimentResponse>();
+
 const Dashboard = () => {
   const recentAlerts = [
     { id: 1, time: "10:23 AM", symbol: "AAPL", type: "Price", confidence: "High", change: "+2.3%" },
@@ -65,12 +69,10 @@ const Dashboard = () => {
     { symbol: "GOOGL", lastPrice: 142.33, volume: "31.4M", change: 1.23, changePercent: 0.87 },
   ];
 
-  // ---- NEW: state for Market News (replaces your hardcoded dailyNews) ----
   const [marketNews, setMarketNews] = useState<MarketNewsItem[]>([]);
   const [marketNewsLoading, setMarketNewsLoading] = useState(false);
   const [marketNewsError, setMarketNewsError] = useState<string | null>(null);
 
-  // ---- NEW: state for company news + sentiment used in Watchlists ----
   const [companyNewsBySymbol, setCompanyNewsBySymbol] = useState<Record<string, CompanyNewsItem[]>>({});
   const [sentimentBySymbol, setSentimentBySymbol] = useState<Record<string, InsiderSentimentResponse>>({});
   const [companyLoading, setCompanyLoading] = useState(false);
@@ -81,7 +83,6 @@ const Dashboard = () => {
     [watchedSymbols]
   );
 
-  // 1) Market news for Dashboard "Daily News" card (now powered by getMarketNews)
   useEffect(() => {
     let cancelled = false;
 
@@ -93,7 +94,6 @@ const Dashboard = () => {
         const data = await getMarketNews("general");
         if (cancelled) return;
 
-        // Finnhub returns an array for /news?category=...
         setMarketNews(Array.isArray(data) ? (data as MarketNewsItem[]) : []);
       } catch (e: any) {
         if (cancelled) return;
@@ -111,50 +111,16 @@ const Dashboard = () => {
   }, []);
 
   useEffect(() => {
-    let cancelled = false;
+    const newsMap: Record<string, CompanyNewsItem[]> = {};
+    const sentimentMap: Record<string, InsiderSentimentResponse> = {};
 
-    async function loadCompanyData() {
-      try {
-        setCompanyLoading(true);
-        setCompanyError(null);
-
-        const results = await Promise.allSettled(
-          watchSymbolsList.map(async (sym) => {
-            const [news, sentiment] = await Promise.all([
-              getStockNews(sym),         
-              getInsiderSentiment(sym),   
-            ]);
-            return { sym, news, sentiment };
-          })
-        );
-
-        if (cancelled) return;
-
-        const newsMap: Record<string, CompanyNewsItem[]> = {};
-        const sentimentMap: Record<string, InsiderSentimentResponse> = {};
-
-        for (const r of results) {
-          if (r.status !== "fulfilled") continue;
-          const { sym, news, sentiment } = r.value;
-
-          newsMap[sym] = Array.isArray(news) ? (news as CompanyNewsItem[]) : [];
-          sentimentMap[sym] = (sentiment ?? {}) as InsiderSentimentResponse;
-        }
-
-        setCompanyNewsBySymbol(newsMap);
-        setSentimentBySymbol(sentimentMap);
-      } catch (e: any) {
-        if (cancelled) return;
-        setCompanyError(e?.message ?? "Failed to load company news/sentiment");
-      } finally {
-        if (!cancelled) setCompanyLoading(false);
-      }
+    for (const sym of watchSymbolsList) {
+      newsMap[sym] = companyNewsCache.get(sym) ?? [];
+      sentimentMap[sym] = sentimentCache.get(sym) ?? {};
     }
 
-    loadCompanyData();
-    return () => {
-      cancelled = true;
-    };
+    setCompanyNewsBySymbol(newsMap);
+    setSentimentBySymbol(sentimentMap);
   }, [watchSymbolsList]);
 
   const getLatestInsiderMspr = (symbol: string) => {
@@ -163,6 +129,59 @@ const Dashboard = () => {
     const latest = s[s.length - 1];
     return typeof latest?.mspr === "number" ? latest.mspr : null;
   };
+
+  const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+const refreshWatchlistData = async () => {
+  setCompanyLoading(true);
+  setCompanyError(null);
+
+  let hadAnyError = false;
+
+  for (const sym of watchSymbolsList) {
+    try {
+      const news = await getStockNews(sym);
+      const newsArr = Array.isArray(news) ? (news as CompanyNewsItem[]) : [];
+
+      companyNewsCache.set(sym, newsArr);
+      setCompanyNewsBySymbol((p) => ({ ...p, [sym]: newsArr }));
+    
+    
+    
+    
+    } catch (e) {
+      hadAnyError = true;
+    }
+
+
+    await delay(600);
+
+    try {
+      const sentiment = await getInsiderSentiment(sym);
+      const sentObj = (sentiment ?? {}) as InsiderSentimentResponse;
+
+      sentimentCache.set(sym, sentObj);
+      setSentimentBySymbol((p) => ({ ...p, [sym]: sentObj }));
+
+
+    console.log("Sentiment:", sentObj);
+    } catch (e) {
+      hadAnyError = true;
+    }
+
+    
+
+    await delay(600);
+  }
+
+  if (hadAnyError) {
+    setCompanyError("Some symbols failed to refresh (likely rate limit). Try again in ~30–60s.");
+  }
+
+  
+
+  setCompanyLoading(false);
+};
 
   return (
     <div className="space-y-6">
@@ -231,17 +250,22 @@ const Dashboard = () => {
           </Card>
 
           <Card className="border-border">
-            <CardHeader className="border-b border-border bg-card">
+            <CardHeader className="border-b border-border bg-card flex flex-row items-center justify-between">
               <CardTitle className="text-lg font-semibold text-foreground">
                 Watched Symbols Activity
                 {companyLoading ? (
-                  <span className="ml-2 text-xs text-muted-foreground font-normal">Loading news/sentiment…</span>
+                  <span className="ml-2 text-xs text-muted-foreground font-normal">Refreshing…</span>
                 ) : null}
                 {companyError ? (
                   <span className="ml-2 text-xs text-red-500 font-normal">{companyError}</span>
                 ) : null}
               </CardTitle>
+
+              <Button onClick={refreshWatchlistData} disabled={companyLoading} variant="secondary">
+                {companyLoading ? "Refreshing…" : "Refresh News/Sentiment"}
+              </Button>
             </CardHeader>
+
             <CardContent className="p-0">
               <Table>
                 <TableHeader>
@@ -271,7 +295,11 @@ const Dashboard = () => {
                                 stock.change > 0 ? "text-emerald-500" : "text-red-500"
                               }`}
                             >
-                              {stock.change > 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                              {stock.change > 0 ? (
+                                <TrendingUp className="w-3 h-3" />
+                              ) : (
+                                <TrendingDown className="w-3 h-3" />
+                              )}
                               <span>
                                 {stock.change > 0 ? "+" : ""}
                                 {stock.changePercent.toFixed(2)}%
@@ -313,7 +341,9 @@ const Dashboard = () => {
                               {topNews.headline ?? "View article"}
                             </a>
                           ) : (
-                            <span className="text-xs text-muted-foreground">No recent articles</span>
+                            <span className="text-xs text-muted-foreground">
+                              No cached articles (click Refresh)
+                            </span>
                           )}
                           {topNews?.source || topNews?.datetime ? (
                             <div className="text-xs text-muted-foreground mt-1">

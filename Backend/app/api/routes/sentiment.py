@@ -20,7 +20,7 @@ async def read_insider_sentiment(asset_symbol: str) -> Any:
         raise HTTPException(status_code=500, detail="Finnhub API key not set")
 
     to_dt = date.today()
-    from_dt = to_dt - timedelta(days=90)  # insider data typically longer window
+    from_dt = to_dt - timedelta(days=90)  
 
     base_url = "https://finnhub.io/api/v1/stock/insider-sentiment"
 

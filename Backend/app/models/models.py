@@ -1,7 +1,7 @@
 from typing import Optional
 import datetime
 
-from sqlalchemy import Boolean, Numeric, DateTime, Double, ForeignKeyConstraint, Index, Integer, PrimaryKeyConstraint, String, UniqueConstraint, text
+from sqlalchemy import Boolean, ForeignKey, Numeric, DateTime, Double, ForeignKeyConstraint, Index, Integer, PrimaryKeyConstraint, String, UniqueConstraint, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 # Python code for ORM models generated directly from SQL using sqlacaodegen package
@@ -14,7 +14,7 @@ class Asset(Base):
     __tablename__ = 'asset'
     __table_args__ = (
         PrimaryKeyConstraint('id', name='asset_pkey'),
-        UniqueConstraint('symbol', 'id', name='asset_symbol_id_key'),
+        UniqueConstraint('symbol', name='asset_symbol_unique'),
         Index('idx_asset_symbol', 'symbol')
     )
 
@@ -49,23 +49,23 @@ class Users(Base):
 
 class Alert(Base):
     __tablename__ = 'alert'
-    __table_args__ = (
-        ForeignKeyConstraint(['asset_id', 'asset_symbol'], ['asset.id', 'asset.symbol'], name='alert_asset_id_symbol_fkey'),
-        ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE', name='alert_user_id_fkey'),
-        PrimaryKeyConstraint('id', name='alert_pkey')
-    )
+
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    user_id: Mapped[int] = mapped_column(Integer, nullable=False)
-    asset_id: Mapped[int] = mapped_column(Integer, nullable=False)
-    asset_symbol: Mapped[str] = mapped_column(String(256))
-    alert_type: Mapped[str] = mapped_column(String(256), nullable=False)
-    email: Mapped[bool] = mapped_column(Boolean, nullable=False)
-    sms: Mapped[bool] = mapped_column(Boolean, nullable=False)
-    created_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, server_default=text('now()'))
-    threshold: Mapped[Optional[float]] = mapped_column(Double(53))
-    asset: Mapped['Asset'] = relationship('Asset', back_populates='alert')
-    user: Mapped['Users'] = relationship('Users', back_populates='alert')
-    alert_event_history: Mapped[list['AlertEventHistory']] = relationship('AlertEventHistory', back_populates='alert')
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    asset_id: Mapped[int] = mapped_column(ForeignKey("asset.id"), nullable=False)
+    alert_type_id: Mapped[int] = mapped_column(
+        ForeignKey("alert_type.id"),
+        nullable=False
+    )
+
+    threshold: Mapped[Optional[float]]
+    email: Mapped[bool]
+    sms: Mapped[bool]
+
+    user = relationship("Users", back_populates="alert")
+    asset = relationship("Asset", back_populates="alert")
+    alert_type = relationship("AlertType", back_populates="alerts")
+    alert_event_history = relationship('AlertEventHistory', cascade="all, delete", passive_deletes=True, back_populates='alert')
 
 
 class MarketData(Base):
@@ -109,7 +109,7 @@ class AlertEventHistory(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     alert_id: Mapped[int] = mapped_column(Integer, nullable=False)
-    reason: Mapped[str] = mapped_column(String(256), nullable=False)
+    confidence: Mapped[str] = mapped_column(String(256), nullable=False)
     sent: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, server_default=text('now()'))
     alert: Mapped['Alert'] = relationship('Alert', back_populates='alert_event_history')
 
@@ -140,6 +140,14 @@ class FinancialOverview(Base):
     debt_to_equity: Mapped[Optional[float]] = mapped_column(Double(53))
     asset_turnover: Mapped[Optional[float]] = mapped_column(Double(53))
     asset: Mapped['Asset'] = relationship('Asset', back_populates='financial_overview')
+
+class AlertType(Base):
+    __tablename__ = 'alert_type'
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(256), unique=True)
+    alerts: Mapped[list["Alert"]] = relationship("Alert", back_populates="alert_type")
+
 
 # example financial overview
 '''

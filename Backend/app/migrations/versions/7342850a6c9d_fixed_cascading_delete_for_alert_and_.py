@@ -1,8 +1,8 @@
-"""alert and alert history schema change
+"""fixed cascading delete for alert and alert history
 
-Revision ID: 038d19ba8e03
-Revises: 
-Create Date: 2026-02-19 18:13:35.707959
+Revision ID: 7342850a6c9d
+Revises: 2a4ff6454a4b
+Create Date: 2026-02-27 15:49:45.961612
 
 """
 from typing import Sequence, Union
@@ -12,8 +12,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = '038d19ba8e03'
-down_revision: Union[str, Sequence[str], None] = None
+revision: str = '7342850a6c9d'
+down_revision: Union[str, Sequence[str], None] = '2a4ff6454a4b'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

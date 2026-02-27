@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from app.core.config import settings
 from app.core.database import init_db
 from app.websocket.alpaca_consumer import AlpacaConsumer
+from app.core.database import get_db
 from app.websocket.stream_processor import StreamProcessor
 from contextlib import asynccontextmanager
 from app.api.main import api_router
@@ -23,8 +24,8 @@ async def lifespan(app: FastAPI):
         queue=queue,
         setting=True,
         symbols_trades=["AAPL"],
-        symbols_bars=["AAPL"],
-        symbols_quotes=["AAPL"]
+        symbols_bars=[],
+        symbols_quotes=[]
     )
 
     stream_processor = StreamProcessor(

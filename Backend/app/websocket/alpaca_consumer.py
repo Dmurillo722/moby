@@ -34,8 +34,9 @@ class AlpacaConsumer():
                 self.logger.info(f"Subscribed: {subscribe_message}")
                 self.logger.info("Receiving data from Alpaca")
                 async for message in ws:
+                    data = json.loads(message)
                     try:
-                        self.queue.put_nowait(message)
+                        self.queue.put_nowait(data)
                     except asyncio.QueueFull:
                         self.logger.warning("Bounded queue full, messages are being dropped")
 

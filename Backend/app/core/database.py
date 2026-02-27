@@ -7,7 +7,7 @@ DB_URL = f'postgresql+asyncpg://{settings.POSTGRES_USER}:{settings.POSTGRES_PASS
 
 engine = create_async_engine(
     url=DB_URL,
-    echo=True,
+    echo=False,
     pool_pre_ping=True
 )
 

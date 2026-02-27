@@ -1,5 +1,7 @@
-
 import asyncio
+from app.schemas.schemas import AlpacaTrade
+from app.services.basic_alert_gen import trade_size_comparison
+from app.core.database import AsyncSessionLocal
 
 class StreamProcessor():
     def __init__(self, logger, worker_count: int, queue: asyncio.Queue):
@@ -7,7 +9,7 @@ class StreamProcessor():
         self.queue = queue
         self.worker_count = worker_count
         self.workers = []
-    
+
     async def start(self):
         self.workers = [asyncio.create_task(self.alapaca_processor_worker(i)) for i in range(self.worker_count)]
         self.logger.info(f"Started stream workers")
@@ -20,10 +22,18 @@ class StreamProcessor():
 
     async def alapaca_processor_worker(self, id):
         while True:
-            msg = await self.queue.get()
-            try:
-                #self.logger.info(f"Processor received message: {msg}")
-                pass
-                # process(msg) # delegate to service logic, might want to implement batching here if it can't keep up
+            events = await self.queue.get()
+            try: # messages contain an array of multiple trades
+                for event in events:
+                    self.logger.info(f"Trade received {event}")
+                    if event.get("T") == "t": # if the event is a trade, delegate to simple detection logic
+                        trade = AlpacaTrade(**event) # usnpack trade into pydantic schema
+                        try:
+                            pass
+                            async with AsyncSessionLocal() as db:
+                                await trade_size_comparison(trade, db, logger=self.logger)
+                        except Exception as e:
+                            self.logger.exception('Problem processing trade')
+                    pass
             finally:
                 self.queue.task_done()

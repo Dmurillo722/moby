@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "Moby Backend"
     ALPACA_API_KEY: str
     ALPACA_API_SECRET: str
+    GOOGLE_PASSWORD: str
     # use to define other environment config this is just an example for now
 
 settings = Settings()

@@ -1,6 +1,2 @@
-class GARCHVolatilityModel:
-    def fit(self, returns):
-        pass
-
-    def forecast(self):
-        pass
+import math
+from arch import arch_model

@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import React, { useEffect, useMemo, useState } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import {
   Table,
   TableBody,
@@ -7,20 +7,14 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { X, Info } from "lucide-react";
-import { getStockNews } from "@/endpoint_connections/news_endpoint";
-import { getInsiderSentiment } from "@/endpoint_connections/sentiment_endpoint";
+} from "@/components/ui/Table";
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { getMarketNews } from "@/endpoint_connections/news_endpoint";
+import { getAlertHistory, createAlert } from "@/endpoint_connections/alerts_endpoint";
+import { ExternalLink } from "lucide-react";
 
-declare global { 
-  interface Window { 
-    TradingView?: any; 
-  } 
-} 
-
-type CompanyNewsItem = {
+type MarketNewsItem = {
   headline?: string;
   source?: string;
   url?: string;
@@ -28,13 +22,11 @@ type CompanyNewsItem = {
   summary?: string;
 };
 
-type InsiderSentimentResponse = {
-  symbol?: string;
-  data?: Array<{
-    month?: string;
-    mspr?: number;
-    change?: number;
-  }>;
+type AlertHistoryItem = {
+  id: number;
+  alert_id: number;
+  confidence: number;
+  sent: string;
 };
 
 function timeAgoFromUnixSeconds(unix?: number) {
@@ -49,589 +41,373 @@ function timeAgoFromUnixSeconds(unix?: number) {
   return `${days}d ago`;
 }
 
-function useTradingViewEmbed(
-  containerRef: React.RefObject<HTMLDivElement>,
-  scriptSrc: string,
-  config: Record<string, any>,
-  deps: any[]
-) {
-  useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
-
-    let widget = container.querySelector<HTMLDivElement>(
-      ".tradingview-widget-container__widget"
-    );
-    if (!widget) {
-      widget = document.createElement("div");
-      widget.className = "tradingview-widget-container__widget";
-      container.appendChild(widget);
-    }
-
-    widget.innerHTML = "";
-    container.querySelectorAll("script").forEach((s) => s.remove());
-
-    const script = document.createElement("script");
-    script.src = scriptSrc;
-    script.async = true;
-    script.type = "text/javascript";
-    script.innerHTML = JSON.stringify(config);
-    container.appendChild(script);
-
-    return () => {
-      widget?.replaceChildren();
-      container.querySelectorAll("script").forEach((s) => s.remove());
-    };
-  }, deps);
+function timeFromIso(sentIso?: string) {
+  if (!sentIso) return "";
+  const d = new Date(sentIso);
+  return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
-const TradingViewWidget = ({ symbol }: { symbol: string }) => {
-  const containerIdRef = useRef(
-    `tradingview_chart_${Math.random().toString(36).slice(2)}`
+function confidenceLabel(conf?: number) {
+  if (typeof conf !== "number") return "—";
+  if (conf >= 0.75) return "High";
+  if (conf >= 0.5) return "Medium";
+  return "Low";
+}
+
+const Dashboard = () => {
+  const watchedSymbols: Array<{
+    symbol: string;
+    lastPrice: number;
+    volume: string;
+    change: number;
+    changePercent: number;
+  }> = [];
+
+  const [marketNews, setMarketNews] = useState<MarketNewsItem[]>([]);
+  const [marketNewsLoading, setMarketNewsLoading] = useState(false);
+  const [marketNewsError, setMarketNewsError] = useState<string | null>(null);
+
+  const [recentAlerts, setRecentAlerts] = useState<AlertHistoryItem[]>([]);
+  const [alertsLoading, setAlertsLoading] = useState(false);
+  const [alertsError, setAlertsError] = useState<string | null>(null);
+
+  const userId = 1;
+
+  const [assetSymbol, setAssetSymbol] = useState("");
+  const [alertType, setAlertType] = useState("size");
+  const [threshold, setThreshold] = useState("");
+  const [email, setEmail] = useState(true);
+  const [sms, setSms] = useState(false);
+  const [createLoading, setCreateLoading] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+
+  const watchSymbolsList = useMemo(
+    () => watchedSymbols.map((s) => s.symbol.toUpperCase()),
+    [watchedSymbols]
   );
-  const scriptLoadedRef = useRef(false);
 
   useEffect(() => {
-    const containerId = containerIdRef.current;
-    const tvSymbol = symbol.includes(":") ? symbol : `NASDAQ:${symbol}`;
+    let cancelled = false;
 
-    const container = document.getElementById(containerId);
-    if (container) container.innerHTML = "";
+    async function load() {
+      try {
+        setMarketNewsLoading(true);
+        setMarketNewsError(null);
 
-    const init = () => {
-      if (!window.TradingView) return;
-      new window.TradingView.widget({
-        autosize: true,
-        symbol: tvSymbol,
-        interval: "D",
-        timezone: "Etc/UTC",
-        theme: "dark",
-        style: "1",
-        locale: "en",
-        enable_publishing: false,
-        hide_side_toolbar: false,
-        allow_symbol_change: true,
-        container_id: containerId,
-        height: 400,
-      });
-    };
+        const data = await getMarketNews("general");
+        if (cancelled) return;
 
-    if (!scriptLoadedRef.current) {
-      const existing = document.querySelector(
-        'script[src="https://s3.tradingview.com/tv.js"]'
-      );
-      if (existing) {
-        scriptLoadedRef.current = true;
-        init();
-        return;
+        setMarketNews(Array.isArray(data) ? (data as MarketNewsItem[]) : []);
+      } catch (e: any) {
+        if (cancelled) return;
+        setMarketNewsError(e?.message ?? "Failed to load market news");
+        setMarketNews([]);
+      } finally {
+        if (!cancelled) setMarketNewsLoading(false);
       }
-
-      const script = document.createElement("script");
-      script.src = "https://s3.tradingview.com/tv.js";
-      script.async = true;
-      script.onload = () => {
-        scriptLoadedRef.current = true;
-        init();
-      };
-      document.head.appendChild(script);
-    } else {
-      init();
     }
-  }, [symbol]);
 
-  return <div id={containerIdRef.current} className="w-full h-[400px]" />;
-};
-
-const MiniChartWidget = ({ symbol }: { symbol: string }) => {
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const tvSymbol = symbol.includes(":") ? symbol : `NASDAQ:${symbol}`;
-
-  useTradingViewEmbed(
-    containerRef,
-    "https://s3.tradingview.com/external-embedding/embed-widget-mini-symbol-overview.js",
-    {
-      symbol: tvSymbol,
-      width: "100%",
-      height: "100%",
-      locale: "en",
-      dateRange: "12M",
-      colorTheme: "dark",
-      isTransparent: true,
-      autosize: true,
-      largeChartUrl: "",
-    },
-    [tvSymbol]
-  );
-
-  return (
-    <div
-      ref={containerRef}
-      className="tradingview-widget-container w-full h-[100px]"
-    />
-  );
-};
-
-const FinData = ({ symbol }: { symbol: string }) => {
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const tvSymbol = symbol.includes(":") ? symbol : `NASDAQ:${symbol}`;
-
-  useTradingViewEmbed(
-    containerRef,
-    "https://s3.tradingview.com/external-embedding/embed-widget-financials.js",
-    {
-      symbol: tvSymbol,
-      colorTheme: "dark",
-      displayMode: "regular",
-      isTransparent: true,
-      locale: "en",
-      width: "100%",
-      height: 600,
-    },
-    [tvSymbol]
-  );
-
-  return (
-    <div
-      ref={containerRef}
-      className="tradingview-widget-container w-full min-h-[600px]"
-    />
-  );
-};
-
-const companyNewsCache = new Map<string, CompanyNewsItem[]>();
-const sentimentCache = new Map<string, InsiderSentimentResponse>();
-
-const Watchlists = () => {
-  const [symbols, setSymbols] = useState([
-    {
-      symbol: "AAPL",
-      name: "Apple Inc.",
-      price: 178.23,
-      change: 2.3,
-      changePercent: 1.31,
-      volume: "52.3M",
-    },
-  ]);
-  const [selectedSymbol, setSelectedSymbol] = useState(symbols[0]);
-  const [newSymbol, setNewSymbol] = useState("");
-  const [searchSymbol, setSearchSymbol] = useState("");
-  const [searchResult, setSearchResult] = useState<any>(null);
-
-  const [companyNewsBySymbol, setCompanyNewsBySymbol] = useState<
-    Record<string, CompanyNewsItem[]>
-  >({});
-  const [sentimentBySymbol, setSentimentBySymbol] = useState<
-    Record<string, InsiderSentimentResponse>
-  >({});
-  const [loadingBySymbol, setLoadingBySymbol] = useState<Record<string, boolean>>(
-    {}
-  );
-  const [errorBySymbol, setErrorBySymbol] = useState<Record<string, string | null>>(
-    {}
-  );
-
-  const symbolsUpper = useMemo(
-    () => symbols.map((s) => s.symbol.toUpperCase()),
-    [symbols]
-  );
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
-    const nextNews: Record<string, CompanyNewsItem[]> = {};
-    const nextSent: Record<string, InsiderSentimentResponse> = {};
-    for (const sym of symbolsUpper) {
-      nextNews[sym] = companyNewsCache.get(sym) ?? [];
-      nextSent[sym] = sentimentCache.get(sym) ?? {};
-    }
-    setCompanyNewsBySymbol(nextNews);
-    setSentimentBySymbol(nextSent);
-  }, [symbolsUpper]);
+    let cancelled = false;
 
-  const searchForSymbol = () => {
-    if (!searchSymbol.trim()) return;
-    const symbol = searchSymbol.trim().toUpperCase();
-    const mockResult = {
-      symbol,
-      name: `${symbol} Company`,
-      price: Math.random() * 500 + 50,
-      change: (Math.random() - 0.5) * 10,
-      changePercent: (Math.random() - 0.5) * 5,
-      volume: `${(Math.random() * 100 + 10).toFixed(1)}M`,
+    async function loadAlerts() {
+      try {
+        setAlertsLoading(true);
+        setAlertsError(null);
+        const data = await getAlertHistory(userId);
+        if (cancelled) return;
+        setRecentAlerts(Array.isArray(data) ? (data as AlertHistoryItem[]) : []);
+      } catch (e: any) {
+        if (cancelled) return;
+        setAlertsError(e?.message ?? "Failed to load alerts");
+        setRecentAlerts([]);
+      } finally {
+        if (!cancelled) setAlertsLoading(false);
+      }
+    }
+
+    loadAlerts();
+    return () => {
+      cancelled = true;
     };
-    setSearchResult(mockResult);
-    setSelectedSymbol(mockResult);
-  };
+  }, [userId]);
 
-  const addSymbol = () => {
-    const sym = newSymbol.trim().toUpperCase();
-    if (!sym) return;
-    if (symbols.find((s) => s.symbol === sym)) return;
-
-    const newEntry = {
-      symbol: sym,
-      name: `${sym} Company`,
-      price: Math.random() * 500 + 50,
-      change: (Math.random() - 0.5) * 10,
-      changePercent: (Math.random() - 0.5) * 5,
-      volume: `${(Math.random() * 100 + 10).toFixed(1)}M`,
-    };
-
-    setSymbols((prev) => [...prev, newEntry]);
-    setSelectedSymbol(newEntry);
-    setNewSymbol("");
-  };
-
-  const addSearchedSymbol = () => {
-    if (!searchResult) return;
-    if (symbols.find((s) => s.symbol === searchResult.symbol)) return;
-    setSymbols((prev) => [...prev, searchResult]);
-    setSearchResult(null);
-    setSearchSymbol("");
-  };
-
-  const removeSymbol = (symbol: string) => {
-    const filtered = symbols.filter((s) => s.symbol !== symbol);
-    setSymbols(filtered);
-    if (selectedSymbol?.symbol === symbol && filtered.length > 0) {
-      setSelectedSymbol(filtered[0]);
+  const refreshAlerts = async () => {
+    try {
+      setAlertsLoading(true);
+      setAlertsError(null);
+      const data = await getAlertHistory(userId);
+      setRecentAlerts(Array.isArray(data) ? (data as AlertHistoryItem[]) : []);
+    } catch (e: any) {
+      setAlertsError(e?.message ?? "Failed to load alerts");
+      setRecentAlerts([]);
+    } finally {
+      setAlertsLoading(false);
     }
   };
 
-  const getLatestInsiderMspr = (symbol: string) => {
-    const s = sentimentBySymbol[symbol]?.data;
-    if (!s || s.length === 0) return null;
-    const latest = s[s.length - 1];
-    return typeof latest?.mspr === "number" ? latest.mspr : null;
-  };
+  const onCreateAlert = async () => {
+    try {
+      setCreateLoading(true);
+      setCreateError(null);
 
-  const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
+      const sym = assetSymbol.trim().toUpperCase();
+      const thr = Number(threshold);
 
-const refreshSymbolData = async (symRaw: string) => {
-  const sym = symRaw.toUpperCase().trim();
-  if (!sym) return;
+      if (!sym) throw new Error("Asset symbol is required");
+      if (!Number.isFinite(thr)) throw new Error("Threshold must be a number");
 
-  setLoadingBySymbol((p) => ({ ...p, [sym]: true }));
-  setErrorBySymbol((p) => ({ ...p, [sym]: null }));
+      await createAlert({
+        user_id: userId,
+        asset_symbol: sym,
+        alert_type: alertType,
+        threshold: thr,
+        email,
+        sms,
+      });
 
-  let hadError = false;
-
-  try {
-    const news = await getStockNews(sym);
-    const newsArr = Array.isArray(news) ? (news as CompanyNewsItem[]) : [];
-    companyNewsCache.set(sym, newsArr);
-    setCompanyNewsBySymbol((p) => ({ ...p, [sym]: newsArr }));
-  } catch (e: any) {
-    hadError = true;
-  }
-
-  await delay(600);
-
-  try {
-    const sentiment = await getInsiderSentiment(sym);
-    const sentObj = (sentiment ?? {}) as InsiderSentimentResponse;
-    sentimentCache.set(sym, sentObj);
-    setSentimentBySymbol((p) => ({ ...p, [sym]: sentObj }));
-  } catch (e: any) {
-    hadError = true;
-  }
-
-  if (hadError) {
-    setErrorBySymbol((p) => ({
-      ...p,
-      [sym]: "Refresh partially failed (likely rate limit). Try again shortly.",
-    }));
-  }
-
-  setLoadingBySymbol((p) => ({ ...p, [sym]: false }));
-};
-
-  const refreshAllWatchlist = async () => {
-    for (const sym of symbolsUpper) {
-      await refreshSymbolData(sym);
-      await new Promise((r) => setTimeout(r, 250));
+      setAssetSymbol("");
+      setThreshold("");
+      await refreshAlerts();
+    } catch (e: any) {
+      setCreateError(e?.message ?? "Failed to create alert");
+    } finally {
+      setCreateLoading(false);
     }
   };
-
-  const selectedSym = selectedSymbol?.symbol?.toUpperCase() ?? "";
-  const selectedTopNews = selectedSym ? companyNewsBySymbol[selectedSym]?.[0] : null;
-  const selectedMspr = selectedSym ? getLatestInsiderMspr(selectedSym) : null;
-  const selectedLoading = selectedSym ? !!loadingBySymbol[selectedSym] : false;
-  const selectedError = selectedSym ? errorBySymbol[selectedSym] : null;
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight text-foreground">
-          Watchlists
-        </h1>
+        <h1 className="text-3xl font-bold tracking-tight text-foreground">Dashboard</h1>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-1 space-y-6">
+        <div className="lg:col-span-2 space-y-6">
           <Card className="border-border">
-            <CardHeader className="border-b border-border bg-card pb-4">
-              <CardTitle className="text-lg font-semibold text-foreground">
-                Search Symbol
-              </CardTitle>
+            <CardHeader className="border-b border-border bg-card">
+              <CardTitle className="text-lg font-semibold text-foreground">Create Alert</CardTitle>
             </CardHeader>
-            <CardContent className="pt-6">
-              <div className="space-y-3">
-                <div className="flex gap-2">
+            <CardContent className="p-6 space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="space-y-1">
+                  <div className="text-xs text-muted-foreground">Symbol</div>
                   <input
-                    type="text"
-                    placeholder="Search TSLA, GOOGL..."
-                    value={searchSymbol}
-                    onChange={(e) => setSearchSymbol(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && searchForSymbol()}
-                    className="flex-1 px-3 py-2 bg-muted/50 border border-border rounded-md text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                    value={assetSymbol}
+                    onChange={(e) => setAssetSymbol(e.target.value)}
+                    className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                    placeholder="AAPL"
                   />
-                  <Button
-                    onClick={searchForSymbol}
-                    variant="secondary"
-                    className="bg-secondary text-secondary-foreground hover:bg-secondary/80"
-                  >
-                    Search
-                  </Button>
                 </div>
 
-                {searchResult && (
-                  <div className="p-3 bg-accent/30 rounded-lg border border-border">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="font-semibold text-foreground">
-                        {searchResult.symbol}
-                      </span>
-                      <Badge
-                        variant="outline"
-                        className="bg-muted/50 border-border text-xs"
-                      >
-                        Preview
-                      </Badge>
-                    </div>
-                    <div className="text-sm text-muted-foreground mb-3">
-                      {searchResult.name}
-                    </div>
-                    <Button
-                      onClick={addSearchedSymbol}
-                      size="sm"
-                      className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
-                      disabled={symbols.some((s) => s.symbol === searchResult.symbol)}
-                    >
-                      {symbols.some((s) => s.symbol === searchResult.symbol)
-                        ? "Already Added"
-                        : "Add to Watchlist"}
-                    </Button>
-                  </div>
-                )}
+                <div className="space-y-1">
+                  <div className="text-xs text-muted-foreground">Type</div>
+                  <select
+                    value={alertType}
+                    onChange={(e) => setAlertType(e.target.value)}
+                    className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                  >
+                    <option value="size">size</option>
+
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <div className="text-xs text-muted-foreground">Threshold</div>
+                  <input
+                    value={threshold}
+                    onChange={(e) => setThreshold(e.target.value)}
+                    className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                    placeholder="100"
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-4">
+                <label className="flex items-center gap-2 text-sm text-foreground">
+                  <input
+                    type="checkbox"
+                    checked={email}
+                    onChange={(e) => setEmail(e.target.checked)}
+                    className="h-4 w-4"
+                  />
+                  Email
+                </label>
+                <label className="flex items-center gap-2 text-sm text-foreground">
+                  <input
+                    type="checkbox"
+                    checked={sms}
+                    onChange={(e) => setSms(e.target.checked)}
+                    className="h-4 w-4"
+                  />
+                  SMS
+                </label>
+
+                <Button onClick={onCreateAlert} disabled={createLoading} variant="secondary">
+                  {createLoading ? "Creating…" : "Create Alert"}
+                </Button>
+
+                {createError ? <span className="text-xs text-red-500">{createError}</span> : null}
               </div>
             </CardContent>
           </Card>
 
           <Card className="border-border">
-            <CardHeader className="border-b border-border bg-card pb-4">
+            <CardHeader className="border-b border-border bg-card flex flex-row items-center justify-between">
               <CardTitle className="text-lg font-semibold text-foreground">
-                Add Symbol
+                Recent Alert
+                {alertsLoading ? <span className="ml-2 text-xs text-muted-foreground font-normal">Loading…</span> : null}
+                {alertsError ? <span className="ml-2 text-xs text-red-500 font-normal">{alertsError}</span> : null}
               </CardTitle>
-            </CardHeader>
-            <CardContent className="pt-6">
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  placeholder="AAPL"
-                  value={newSymbol}
-                  onChange={(e) => setNewSymbol(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && addSymbol()}
-                  className="flex-1 px-3 py-2 bg-muted/50 border border-border rounded-md text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                />
-                <Button
-                  onClick={addSymbol}
-                  className="bg-primary text-primary-foreground hover:bg-primary/90"
-                >
-                  Add
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
 
-          <Card className="border-border">
-            <CardHeader className="border-b border-border bg-card pb-4">
-              <CardTitle className="text-lg font-semibold text-foreground">
-                Watchlist
-              </CardTitle>
+              <Button onClick={refreshAlerts} disabled={alertsLoading} variant="secondary">
+                {alertsLoading ? "Loading…" : "Refresh Alerts"}
+              </Button>
             </CardHeader>
-            <CardContent className="pt-4">
-              <div className="flex gap-2">
-                <Button
-                  onClick={refreshAllWatchlist}
-                  variant="secondary"
-                  className="w-full"
-                >
-                  Refresh All News/Sentiment
-                </Button>
-              </div>
-            </CardContent>
 
             <CardContent className="p-0">
               <Table>
                 <TableHeader>
                   <TableRow className="bg-muted/50 hover:bg-muted/50 border-border">
-                    <TableHead className="text-muted-foreground font-semibold">
-                      Symbol
-                    </TableHead>
-                    <TableHead className="text-muted-foreground font-semibold">
-                      Remove
-                    </TableHead>
-                    <TableHead className="text-muted-foreground font-semibold">
-                      Info
-                    </TableHead>
+                    <TableHead className="text-muted-foreground font-semibold">Time</TableHead>
+                    <TableHead className="text-muted-foreground font-semibold">Alert ID</TableHead>
+                    <TableHead className="text-muted-foreground font-semibold">Confidence</TableHead>
+                    <TableHead className="text-muted-foreground font-semibold">View</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {symbols.map((stock) => {
-                    const sym = stock.symbol.toUpperCase();
-                    const isSel = selectedSymbol?.symbol === stock.symbol;
+                  {recentAlerts.map((event) => {
+                    const label = confidenceLabel(event.confidence);
+
                     return (
-                      <TableRow
-                        key={stock.symbol}
-                        className={`hover:bg-accent/50 transition-colors border-border cursor-pointer ${
-                          isSel ? "bg-accent/30" : ""
-                        }`}
-                      >
-                        <TableCell className="font-semibold text-foreground">
-                          {stock.symbol}
+                      <TableRow key={event.id} className="hover:bg-accent/50 transition-colors border-border">
+                        <TableCell className="font-medium text-muted-foreground">{timeFromIso(event.sent)}</TableCell>
+                        <TableCell>
+                          <span className="font-semibold text-foreground">{event.alert_id}</span>
                         </TableCell>
                         <TableCell>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => removeSymbol(stock.symbol)}
-                            className="h-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                          <Badge
+                            variant="outline"
+                            className={
+                              label === "High"
+                                ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20"
+                                : label === "Medium"
+                                  ? "bg-amber-500/10 text-amber-500 border-amber-500/20"
+                                  : label === "Low"
+                                    ? "bg-red-500/10 text-red-500 border-red-500/20"
+                                    : "bg-muted/50 border-border"
+                            }
                           >
-                            <X className="w-4 h-4" />
-                          </Button>
+                            {label}
+                          </Badge>
                         </TableCell>
                         <TableCell>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setSelectedSymbol(stock)}
-                            className="h-8 text-primary hover:text-primary hover:bg-primary/10"
-                          >
-                            <Info className="w-4 h-4" />
+                          <Button variant="ghost" size="sm" className="h-8 text-muted-foreground hover:text-foreground">
+                            <ExternalLink className="w-4 h-4" />
                           </Button>
                         </TableCell>
                       </TableRow>
                     );
                   })}
+
+                  {!alertsLoading && recentAlerts.length === 0 && !alertsError ? (
+                    <TableRow>
+                      <TableCell colSpan={4} className="text-sm text-muted-foreground py-6 text-center">
+                        No alert history returned.
+                      </TableCell>
+                    </TableRow>
+                  ) : null}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+
+          <Card className="border-border">
+            <CardHeader className="border-b border-border bg-card flex flex-row items-center justify-between">
+              <CardTitle className="text-lg font-semibold text-foreground">Watched Symbols Activity</CardTitle>
+              <Button disabled variant="secondary">
+                Refresh News/Sentiment
+              </Button>
+            </CardHeader>
+
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-muted/50 hover:bg-muted/50 border-border">
+                    <TableHead className="text-muted-foreground font-semibold">Symbol</TableHead>
+                    <TableHead className="text-muted-foreground font-semibold">Last Price</TableHead>
+                    <TableHead className="text-muted-foreground font-semibold">Volume</TableHead>
+                    <TableHead className="text-muted-foreground font-semibold">Insider</TableHead>
+                    <TableHead className="text-muted-foreground font-semibold">Top News</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {watchSymbolsList.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={5} className="text-sm text-muted-foreground py-6 text-center">
+                        No watched symbols yet.
+                      </TableCell>
+                    </TableRow>
+                  ) : null}
                 </TableBody>
               </Table>
             </CardContent>
           </Card>
         </div>
 
-        <div className="lg:col-span-2 space-y-6">
-          {selectedSymbol && (
-            <>
-              <Card className="border-border">
-                <MiniChartWidget symbol={selectedSymbol.symbol} />
-              </Card>
+        <div className="space-y-6">
+          <Card className="border-border">
+            <CardHeader className="border-b border-border bg-card">
+              <CardTitle className="text-lg font-semibold text-foreground">
+                Daily News
+                {marketNewsLoading ? <span className="ml-2 text-xs text-muted-foreground font-normal">Loading…</span> : null}
+                {marketNewsError ? <span className="ml-2 text-xs text-red-500 font-normal">{marketNewsError}</span> : null}
+              </CardTitle>
+            </CardHeader>
 
-              <Card className="border-border">
-                <CardHeader className="border-b border-border bg-card flex flex-row items-center justify-between">
-                  <CardTitle className="text-lg font-semibold text-foreground">
-                    {selectedSymbol.symbol} News & Sentiment
-                    {selectedError ? (
-                      <span className="ml-2 text-xs text-red-500 font-normal">
-                        {selectedError}
-                      </span>
-                    ) : null}
-                  </CardTitle>
-                  <Button
-                    onClick={() => refreshSymbolData(selectedSymbol.symbol)}
-                    disabled={selectedLoading}
-                    variant="secondary"
-                  >
-                    {selectedLoading ? "Refreshing…" : "Refresh"}
-                  </Button>
-                </CardHeader>
-                <CardContent className="p-4 space-y-3">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm text-muted-foreground">Insider MSPR:</span>
-                    {selectedMspr === null ? (
-                      <span className="text-sm text-muted-foreground">—</span>
-                    ) : (
-                      <Badge
-                        variant="outline"
-                        className={
-                          selectedMspr >= 0
-                            ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20"
-                            : "bg-red-500/10 text-red-500 border-red-500/20"
-                        }
-                        title="MSPR (Monthly Share Purchase Ratio)"
-                      >
-                        MSPR {selectedMspr >= 0 ? "+" : ""}
-                        {selectedMspr.toFixed(2)}
-                      </Badge>
-                    )}
-                  </div>
+            <CardContent className="p-4">
+              <div className="space-y-4">
+                {(marketNews ?? []).slice(0, 8).map((news, index) => {
+                  const title = news.headline ?? "Untitled";
+                  const source = news.source ?? "Unknown";
+                  const time = timeAgoFromUnixSeconds(news.datetime);
+                  const url = news.url ?? "#";
 
-                  <div>
-                    <div className="text-sm font-semibold text-foreground mb-1">
-                      Top Company News
-                    </div>
-                    {selectedTopNews?.url ? (
-                      <a
-                        href={selectedTopNews.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-sm text-foreground hover:text-primary"
-                        title={selectedTopNews.headline}
-                      >
-                        {selectedTopNews.headline ?? "View article"}
+                  return (
+                    <div
+                      key={index}
+                      className="group cursor-pointer pb-4 border-b border-border last:border-0 last:pb-0 hover:bg-accent/30 -mx-4 px-4 py-3 rounded-lg transition-colors"
+                    >
+                      <a href={url} target="_blank" rel="noreferrer" className="block">
+                        <h3 className="font-semibold text-sm text-foreground leading-snug group-hover:text-primary transition-colors">
+                          {title}
+                        </h3>
+                        <div className="flex items-center gap-2 mt-2">
+                          <span className="text-xs text-muted-foreground font-medium">{source}</span>
+                          {time ? <span className="text-xs text-muted-foreground/50">•</span> : null}
+                          {time ? <span className="text-xs text-muted-foreground">{time}</span> : null}
+                        </div>
                       </a>
-                    ) : (
-                      <div className="text-sm text-muted-foreground">
-                        No cached company news yet. Click Refresh.
-                      </div>
-                    )}
-                    {selectedTopNews?.source || selectedTopNews?.datetime ? (
-                      <div className="text-xs text-muted-foreground mt-1">
-                        {selectedTopNews?.source ? selectedTopNews.source : ""}
-                        {selectedTopNews?.source && selectedTopNews?.datetime ? " • " : ""}
-                        {selectedTopNews?.datetime
-                          ? timeAgoFromUnixSeconds(selectedTopNews.datetime)
-                          : ""}
-                      </div>
-                    ) : null}
-                  </div>
-                </CardContent>
-              </Card>
+                    </div>
+                  );
+                })}
 
-              <Card className="border-border">
-                <CardHeader className="border-b border-border bg-card">
-                  <CardTitle className="text-lg font-semibold text-foreground">
-                    Price History
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="p-4">
-                  <TradingViewWidget symbol={selectedSymbol.symbol} />
-                </CardContent>
-              </Card>
-
-              <Card className="border-border">
-                <CardHeader className="border-b border-border bg-card">
-                  <CardTitle className="text-lg font-semibold text-foreground">
-                    {selectedSymbol.symbol} Financials
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="p-4">
-                  <FinData symbol={selectedSymbol.symbol} />
-                </CardContent>
-              </Card>
-            </>
-          )}
+                {!marketNewsLoading && marketNews.length === 0 && !marketNewsError ? (
+                  <div className="text-sm text-muted-foreground">No market news returned.</div>
+                ) : null}
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </div>
     </div>
   );
 };
 
-export default Watchlists;
+export default Dashboard;

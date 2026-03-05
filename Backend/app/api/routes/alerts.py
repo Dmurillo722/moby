@@ -1,8 +1,9 @@
 from typing import Any, List
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import select, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
+import datetime as dt
 from app.schemas.schemas import (
     CreateAlert as CreateAlertSchema,
     AlertHistoryResponseSchema,
@@ -70,7 +71,7 @@ async def get_alert_history(user_id: int, db: AsyncSession = Depends(get_db)) ->
         return []
     result = await db.execute(
         select(AlertEventHistoryORM).where(AlertEventHistoryORM.alert_id.in_(alert_ids))
-                                           .order_by(AlertEventHistoryORM.sent)
+                                           .order_by(desc(AlertEventHistoryORM.sent))
                                            .limit(3)
     );
     history = result.scalars().all()
@@ -78,11 +79,14 @@ async def get_alert_history(user_id: int, db: AsyncSession = Depends(get_db)) ->
         return []
     result = []
     for event in history:
+        sent = event.sent
+        if sent is not None and sent.tzinfo is None:
+            sent = sent.replace(tzinfo=dt.timezone.utc)
         result.append(AlertHistoryResponseSchema(
             id=event.id,
             alert_id=event.alert_id,
             confidence=event.confidence,
-            sent=event.sent
+            sent=sent
         ))
     return result
 

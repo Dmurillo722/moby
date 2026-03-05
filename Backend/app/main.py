@@ -1,13 +1,9 @@
 from fastapi import FastAPI
 from app.core.config import settings
 from app.core.database import init_db
-from app.websocket.alpaca_consumer import AlpacaConsumer
-from app.core.database import get_db
-from app.websocket.stream_processor import StreamProcessor
 from contextlib import asynccontextmanager
 from app.api.main import api_router
 from fastapi.middleware.cors import CORSMiddleware
-import asyncio
 import logging
 
 logger = logging.getLogger("uvicorn")

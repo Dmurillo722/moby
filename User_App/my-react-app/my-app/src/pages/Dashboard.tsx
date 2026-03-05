@@ -12,8 +12,8 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { getStockNews, getMarketNews } from "@/endpoint_connections/news_endpoint";
 import { getInsiderSentiment } from "@/endpoint_connections/sentiment_endpoint";
+import { getAlertHistory } from "@/endpoint_connections/alerts_endpoint";
 import { ExternalLink, TrendingUp, TrendingDown } from "lucide-react";
-
 
 type MarketNewsItem = {
   headline?: string;
@@ -27,7 +27,7 @@ type CompanyNewsItem = {
   headline?: string;
   source?: string;
   url?: string;
-  datetime?: number; 
+  datetime?: number;
   summary?: string;
 };
 
@@ -38,6 +38,13 @@ type InsiderSentimentResponse = {
     mspr?: number;
     change?: number;
   }>;
+};
+
+type AlertHistoryItem = {
+  id: number;
+  alert_id: number;
+  confidence: number;
+  sent: string;
 };
 
 function timeAgoFromUnixSeconds(unix?: number) {
@@ -52,22 +59,30 @@ function timeAgoFromUnixSeconds(unix?: number) {
   return `${days}d ago`;
 }
 
+function timeFromIso(sentIso?: string) {
+  if (!sentIso) return "";
+  const d = new Date(sentIso);
+  return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+function confidenceLabel(conf?: number) {
+  if (typeof conf !== "number") return "—";
+  if (conf >= 0.75) return "High";
+  if (conf >= 0.5) return "Medium";
+  return "Low";
+}
+
 const companyNewsCache = new Map<string, CompanyNewsItem[]>();
 const sentimentCache = new Map<string, InsiderSentimentResponse>();
 
 const Dashboard = () => {
-  const recentAlerts = [
-    { id: 1, time: "10:23 AM", symbol: "AAPL", type: "Price", confidence: "High", change: "+2.3%" },
-    { id: 2, time: "09:45 AM", symbol: "TSLA", type: "Volume", confidence: "Medium", change: "+15.2%" },
-    { id: 3, time: "09:12 AM", symbol: "MSFT", type: "Price", confidence: "High", change: "-1.1%" },
-  ];
-
-  const watchedSymbols = [
-    { symbol: "AAPL", lastPrice: 178.23, volume: "52.3M", change: 2.3, changePercent: 1.31 },
-    { symbol: "TSLA", lastPrice: 242.84, volume: "98.7M", change: -3.21, changePercent: -1.30 },
-    { symbol: "MSFT", lastPrice: 412.56, volume: "28.1M", change: 5.67, changePercent: 1.39 },
-    { symbol: "GOOGL", lastPrice: 142.33, volume: "31.4M", change: 1.23, changePercent: 0.87 },
-  ];
+  const watchedSymbols: Array<{
+    symbol: string;
+    lastPrice: number;
+    volume: string;
+    change: number;
+    changePercent: number;
+  }> = [];
 
   const [marketNews, setMarketNews] = useState<MarketNewsItem[]>([]);
   const [marketNewsLoading, setMarketNewsLoading] = useState(false);
@@ -77,6 +92,12 @@ const Dashboard = () => {
   const [sentimentBySymbol, setSentimentBySymbol] = useState<Record<string, InsiderSentimentResponse>>({});
   const [companyLoading, setCompanyLoading] = useState(false);
   const [companyError, setCompanyError] = useState<string | null>(null);
+
+  const [recentAlerts, setRecentAlerts] = useState<AlertHistoryItem[]>([]);
+  const [alertsLoading, setAlertsLoading] = useState(false);
+  const [alertsError, setAlertsError] = useState<string | null>(null);
+
+  const userId = 1;
 
   const watchSymbolsList = useMemo(
     () => watchedSymbols.map((s) => s.symbol.toUpperCase()),
@@ -123,6 +144,31 @@ const Dashboard = () => {
     setSentimentBySymbol(sentimentMap);
   }, [watchSymbolsList]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadAlerts() {
+      try {
+        setAlertsLoading(true);
+        setAlertsError(null);
+        const data = await getAlertHistory(userId);
+        if (cancelled) return;
+        setRecentAlerts(Array.isArray(data) ? (data as AlertHistoryItem[]) : []);
+      } catch (e: any) {
+        if (cancelled) return;
+        setAlertsError(e?.message ?? "Failed to load alerts");
+        setRecentAlerts([]);
+      } finally {
+        if (!cancelled) setAlertsLoading(false);
+      }
+    }
+
+    loadAlerts();
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
+
   const getLatestInsiderMspr = (symbol: string) => {
     const s = sentimentBySymbol[symbol]?.data;
     if (!s || s.length === 0) return null;
@@ -132,56 +178,63 @@ const Dashboard = () => {
 
   const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-const refreshWatchlistData = async () => {
-  setCompanyLoading(true);
-  setCompanyError(null);
+  const refreshWatchlistData = async () => {
+    setCompanyLoading(true);
+    setCompanyError(null);
 
-  let hadAnyError = false;
-
-  for (const sym of watchSymbolsList) {
-    try {
-      const news = await getStockNews(sym);
-      const newsArr = Array.isArray(news) ? (news as CompanyNewsItem[]) : [];
-
-      companyNewsCache.set(sym, newsArr);
-      setCompanyNewsBySymbol((p) => ({ ...p, [sym]: newsArr }));
-    
-    
-    
-    
-    } catch (e) {
-      hadAnyError = true;
+    if (watchSymbolsList.length === 0) {
+      setCompanyLoading(false);
+      return;
     }
 
+    let hadAnyError = false;
 
-    await delay(600);
+    for (const sym of watchSymbolsList) {
+      try {
+        const news = await getStockNews(sym);
+        const newsArr = Array.isArray(news) ? (news as CompanyNewsItem[]) : [];
 
-    try {
-      const sentiment = await getInsiderSentiment(sym);
-      const sentObj = (sentiment ?? {}) as InsiderSentimentResponse;
+        companyNewsCache.set(sym, newsArr);
+        setCompanyNewsBySymbol((p) => ({ ...p, [sym]: newsArr }));
+      } catch (e) {
+        hadAnyError = true;
+      }
 
-      sentimentCache.set(sym, sentObj);
-      setSentimentBySymbol((p) => ({ ...p, [sym]: sentObj }));
+      await delay(600);
 
+      try {
+        const sentiment = await getInsiderSentiment(sym);
+        const sentObj = (sentiment ?? {}) as InsiderSentimentResponse;
 
-    console.log("Sentiment:", sentObj);
-    } catch (e) {
-      hadAnyError = true;
+        sentimentCache.set(sym, sentObj);
+        setSentimentBySymbol((p) => ({ ...p, [sym]: sentObj }));
+      } catch (e) {
+        hadAnyError = true;
+      }
+
+      await delay(600);
     }
 
-    
+    if (hadAnyError) {
+      setCompanyError("Some symbols failed to refresh (likely rate limit). Try again in ~30–60s.");
+    }
 
-    await delay(600);
-  }
+    setCompanyLoading(false);
+  };
 
-  if (hadAnyError) {
-    setCompanyError("Some symbols failed to refresh (likely rate limit). Try again in ~30–60s.");
-  }
-
-  
-
-  setCompanyLoading(false);
-};
+  const refreshAlerts = async () => {
+    try {
+      setAlertsLoading(true);
+      setAlertsError(null);
+      const data = await getAlertHistory(userId);
+      setRecentAlerts(Array.isArray(data) ? (data as AlertHistoryItem[]) : []);
+    } catch (e: any) {
+      setAlertsError(e?.message ?? "Failed to load alerts");
+      setRecentAlerts([]);
+    } finally {
+      setAlertsLoading(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -192,58 +245,74 @@ const refreshWatchlistData = async () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
           <Card className="border-border">
-            <CardHeader className="border-b border-border bg-card">
-              <CardTitle className="text-lg font-semibold text-foreground">Recent Alert</CardTitle>
+            <CardHeader className="border-b border-border bg-card flex flex-row items-center justify-between">
+              <CardTitle className="text-lg font-semibold text-foreground">
+                Recent Alert
+                {alertsLoading ? (
+                  <span className="ml-2 text-xs text-muted-foreground font-normal">Loading…</span>
+                ) : null}
+                {alertsError ? (
+                  <span className="ml-2 text-xs text-red-500 font-normal">{alertsError}</span>
+                ) : null}
+              </CardTitle>
+
+              <Button onClick={refreshAlerts} disabled={alertsLoading} variant="secondary">
+                {alertsLoading ? "Loading…" : "Refresh Alerts"}
+              </Button>
             </CardHeader>
+
             <CardContent className="p-0">
               <Table>
                 <TableHeader>
                   <TableRow className="bg-muted/50 hover:bg-muted/50 border-border">
                     <TableHead className="text-muted-foreground font-semibold">Time</TableHead>
-                    <TableHead className="text-muted-foreground font-semibold">Symbol</TableHead>
-                    <TableHead className="text-muted-foreground font-semibold">Type</TableHead>
+                    <TableHead className="text-muted-foreground font-semibold">Alert ID</TableHead>
                     <TableHead className="text-muted-foreground font-semibold">Confidence</TableHead>
                     <TableHead className="text-muted-foreground font-semibold">View</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {recentAlerts.map((alert) => (
-                    <TableRow key={alert.id} className="hover:bg-accent/50 transition-colors border-border">
-                      <TableCell className="font-medium text-muted-foreground">{alert.time}</TableCell>
-                      <TableCell>
-                        <span className="font-semibold text-foreground">{alert.symbol}</span>
-                        <span
-                          className={`ml-2 text-xs ${
-                            alert.change.startsWith("+") ? "text-emerald-500" : "text-red-500"
-                          }`}
-                        >
-                          {alert.change}
-                        </span>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="bg-muted/50 border-border">
-                          {alert.type}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge
-                          variant="outline"
-                          className={
-                            alert.confidence === "High"
-                              ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20"
-                              : "bg-amber-500/10 text-amber-500 border-amber-500/20"
-                          }
-                        >
-                          {alert.confidence}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Button variant="ghost" size="sm" className="h-8 text-muted-foreground hover:text-foreground">
-                          <ExternalLink className="w-4 h-4" />
-                        </Button>
+                  {recentAlerts.map((event) => {
+                    const label = confidenceLabel(event.confidence);
+
+                    return (
+                      <TableRow key={event.id} className="hover:bg-accent/50 transition-colors border-border">
+                        <TableCell className="font-medium text-muted-foreground">{timeFromIso(event.sent)}</TableCell>
+                        <TableCell>
+                          <span className="font-semibold text-foreground">{event.alert_id}</span>
+                        </TableCell>
+                        <TableCell>
+                          <Badge
+                            variant="outline"
+                            className={
+                              label === "High"
+                                ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20"
+                                : label === "Medium"
+                                  ? "bg-amber-500/10 text-amber-500 border-amber-500/20"
+                                  : label === "Low"
+                                    ? "bg-red-500/10 text-red-500 border-red-500/20"
+                                    : "bg-muted/50 border-border"
+                            }
+                          >
+                            {label}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Button variant="ghost" size="sm" className="h-8 text-muted-foreground hover:text-foreground">
+                            <ExternalLink className="w-4 h-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+
+                  {!alertsLoading && recentAlerts.length === 0 && !alertsError ? (
+                    <TableRow>
+                      <TableCell colSpan={4} className="text-sm text-muted-foreground py-6 text-center">
+                        No alert history returned.
                       </TableCell>
                     </TableRow>
-                  ))}
+                  ) : null}
                 </TableBody>
               </Table>
             </CardContent>
@@ -261,7 +330,7 @@ const refreshWatchlistData = async () => {
                 ) : null}
               </CardTitle>
 
-              <Button onClick={refreshWatchlistData} disabled={companyLoading} variant="secondary">
+              <Button onClick={refreshWatchlistData} disabled={companyLoading || watchSymbolsList.length === 0} variant="secondary">
                 {companyLoading ? "Refreshing…" : "Refresh News/Sentiment"}
               </Button>
             </CardHeader>
@@ -295,11 +364,7 @@ const refreshWatchlistData = async () => {
                                 stock.change > 0 ? "text-emerald-500" : "text-red-500"
                               }`}
                             >
-                              {stock.change > 0 ? (
-                                <TrendingUp className="w-3 h-3" />
-                              ) : (
-                                <TrendingDown className="w-3 h-3" />
-                              )}
+                              {stock.change > 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
                               <span>
                                 {stock.change > 0 ? "+" : ""}
                                 {stock.changePercent.toFixed(2)}%
@@ -341,9 +406,7 @@ const refreshWatchlistData = async () => {
                               {topNews.headline ?? "View article"}
                             </a>
                           ) : (
-                            <span className="text-xs text-muted-foreground">
-                              No cached articles (click Refresh)
-                            </span>
+                            <span className="text-xs text-muted-foreground">No cached articles (click Refresh)</span>
                           )}
                           {topNews?.source || topNews?.datetime ? (
                             <div className="text-xs text-muted-foreground mt-1">
@@ -356,6 +419,14 @@ const refreshWatchlistData = async () => {
                       </TableRow>
                     );
                   })}
+
+                  {watchedSymbols.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={5} className="text-sm text-muted-foreground py-6 text-center">
+                        No watched symbols yet.
+                      </TableCell>
+                    </TableRow>
+                  ) : null}
                 </TableBody>
               </Table>
             </CardContent>

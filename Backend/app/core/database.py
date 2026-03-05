@@ -2,6 +2,8 @@ from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, Asyn
 from app.core.config import settings
 from typing import AsyncGenerator
 from app.models.models import Base
+from redis.asyncio import Redis
+
 
 DB_URL = f'postgresql+asyncpg://{settings.POSTGRES_USER}:{settings.POSTGRES_PASSWORD}@db/{settings.POSTGRES_DB}'
 
@@ -30,3 +32,6 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
             yield session
         finally:
             await session.close()
+    
+def get_redis() -> Redis:
+    return Redis.from_url(settings.REDIS_URL, decode_responses=True)

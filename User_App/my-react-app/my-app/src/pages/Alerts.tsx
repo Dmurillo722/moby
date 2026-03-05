@@ -16,7 +16,7 @@ import { getAlertHistory } from "@/endpoint_connections/alerts_endpoint";
 type AlertHistoryItem = {
   id: number;
   alert_id: number;
-  confidence: number;
+  confidence: string;
   sent: string;
 };
 
@@ -26,17 +26,22 @@ function timeFromIso(sentIso?: string) {
   return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
-function confidenceLabel(conf?: number) {
-  if (typeof conf !== "number") return "—";
-  if (conf >= 0.75) return "High";
-  if (conf >= 0.5) return "Medium";
+function confidenceLabel(conf?: string) {
+  const n = conf == null ? NaN : Number(conf);
+  console.log(n);
+  if (!Number.isFinite(n)) return "—";
+  if (n / 400 >= 0.75) return "High";
+  if (n / 400 >= 0.5) return "Medium";
   return "Low";
 }
-
 const VolumeActivityChart = ({ data }: { data: any[] }) => {
   const maxVolume = Math.max(...data.map((d) => d.volume));
-  const maxPrice = Math.max(...data.map((d) => Math.max(d.high, d.open, d.close)));
-  const minPrice = Math.min(...data.map((d) => Math.min(d.low, d.open, d.close)));
+  const maxPrice = Math.max(
+    ...data.map((d) => Math.max(d.high, d.open, d.close)),
+  );
+  const minPrice = Math.min(
+    ...data.map((d) => Math.min(d.low, d.open, d.close)),
+  );
   const priceRange = maxPrice - minPrice;
 
   const getY = (price: number) => {
@@ -45,7 +50,12 @@ const VolumeActivityChart = ({ data }: { data: any[] }) => {
 
   return (
     <div className="w-full bg-muted/20 rounded-lg p-4">
-      <svg width="100%" height="250" viewBox="0 0 600 250" preserveAspectRatio="none">
+      <svg
+        width="100%"
+        height="250"
+        viewBox="0 0 600 250"
+        preserveAspectRatio="none"
+      >
         {[0, 1, 2, 3, 4].map((i) => (
           <line
             key={`grid-${i}`}
@@ -72,8 +82,22 @@ const VolumeActivityChart = ({ data }: { data: any[] }) => {
 
           return (
             <g key={i}>
-              <line x1={x} y1={highY} x2={x} y2={lowY} stroke={color} strokeWidth="1.5" />
-              <rect x={x - 8} y={bodyTop} width="16" height={bodyHeight} fill={color} opacity="0.8" />
+              <line
+                x1={x}
+                y1={highY}
+                x2={x}
+                y2={lowY}
+                stroke={color}
+                strokeWidth="1.5"
+              />
+              <rect
+                x={x - 8}
+                y={bodyTop}
+                width="16"
+                height={bodyHeight}
+                fill={color}
+                opacity="0.8"
+              />
               <rect
                 x={x - 8}
                 y={210}
@@ -101,7 +125,9 @@ const Alerts = () => {
   const userId = 1;
 
   const [alerts, setAlerts] = useState<AlertHistoryItem[]>([]);
-  const [selectedAlert, setSelectedAlert] = useState<AlertHistoryItem | null>(null);
+  const [selectedAlert, setSelectedAlert] = useState<AlertHistoryItem | null>(
+    null,
+  );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -137,7 +163,9 @@ const Alerts = () => {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight text-foreground">Alerts</h1>
+        <h1 className="text-3xl font-bold tracking-tight text-foreground">
+          Alerts
+        </h1>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
@@ -147,10 +175,18 @@ const Alerts = () => {
               <Table>
                 <TableHeader>
                   <TableRow className="bg-muted/50 hover:bg-muted/50 border-border">
-                    <TableHead className="text-muted-foreground font-semibold">Time</TableHead>
-                    <TableHead className="text-muted-foreground font-semibold">Alert ID</TableHead>
-                    <TableHead className="text-muted-foreground font-semibold">Confidence</TableHead>
-                    <TableHead className="text-muted-foreground font-semibold">View</TableHead>
+                    <TableHead className="text-muted-foreground font-semibold">
+                      Time
+                    </TableHead>
+                    <TableHead className="text-muted-foreground font-semibold">
+                      Alert ID
+                    </TableHead>
+                    <TableHead className="text-muted-foreground font-semibold">
+                      Confidence
+                    </TableHead>
+                    <TableHead className="text-muted-foreground font-semibold">
+                      View
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -168,7 +204,9 @@ const Alerts = () => {
                           {timeFromIso(alert.sent)}
                         </TableCell>
                         <TableCell>
-                          <span className="font-semibold text-foreground">{alert.alert_id}</span>
+                          <span className="font-semibold text-foreground">
+                            {alert.alert_id}
+                          </span>
                         </TableCell>
                         <TableCell>
                           <Badge
@@ -201,7 +239,10 @@ const Alerts = () => {
 
                   {!loading && alerts.length === 0 && !error ? (
                     <TableRow>
-                      <TableCell colSpan={4} className="text-sm text-muted-foreground py-6 text-center">
+                      <TableCell
+                        colSpan={4}
+                        className="text-sm text-muted-foreground py-6 text-center"
+                      >
                         No alerts yet.
                       </TableCell>
                     </TableRow>
@@ -209,7 +250,10 @@ const Alerts = () => {
 
                   {error ? (
                     <TableRow>
-                      <TableCell colSpan={4} className="text-sm text-red-500 py-6 text-center">
+                      <TableCell
+                        colSpan={4}
+                        className="text-sm text-red-500 py-6 text-center"
+                      >
                         {error}
                       </TableCell>
                     </TableRow>
@@ -225,23 +269,37 @@ const Alerts = () => {
             <>
               <Card className="border-border">
                 <CardHeader className="border-b border-border bg-card">
-                  <CardTitle className="text-lg font-semibold text-foreground">Alert Details</CardTitle>
+                  <CardTitle className="text-lg font-semibold text-foreground">
+                    Alert Details
+                  </CardTitle>
                 </CardHeader>
                 <CardContent className="p-6">
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <span className="text-sm text-muted-foreground">Alert ID:</span>
-                      <div className="mt-1 text-lg font-semibold text-foreground">{selectedAlert.alert_id}</div>
+                      <span className="text-sm text-muted-foreground">
+                        Alert ID:
+                      </span>
+                      <div className="mt-1 text-lg font-semibold text-foreground">
+                        {selectedAlert.alert_id}
+                      </div>
                     </div>
                     <div>
-                      <span className="text-sm text-muted-foreground">Time:</span>
-                      <div className="mt-1 text-lg font-semibold text-foreground">{timeFromIso(selectedAlert.sent)}</div>
+                      <span className="text-sm text-muted-foreground">
+                        Time:
+                      </span>
+                      <div className="mt-1 text-lg font-semibold text-foreground">
+                        {timeFromIso(selectedAlert.sent)}
+                      </div>
                     </div>
                     <div>
-                      <span className="text-sm text-muted-foreground">Confidence:</span>
+                      <span className="text-sm text-muted-foreground">
+                        Confidence:
+                      </span>
                       <div className="mt-1">
                         {(() => {
-                          const label = confidenceLabel(selectedAlert.confidence);
+                          const label = confidenceLabel(
+                            selectedAlert.confidence,
+                          );
                           return (
                             <Badge
                               variant="outline"
@@ -269,14 +327,18 @@ const Alerts = () => {
                 <CardHeader className="border-b border-border bg-card">
                   <div className="flex items-center gap-2">
                     <Activity className="w-5 h-5 text-muted-foreground" />
-                    <CardTitle className="text-lg font-semibold text-foreground">Volume Activity</CardTitle>
+                    <CardTitle className="text-lg font-semibold text-foreground">
+                      Volume Activity
+                    </CardTitle>
                   </div>
                 </CardHeader>
                 <CardContent className="p-6">
                   {volumeData.length ? (
                     <VolumeActivityChart data={volumeData} />
                   ) : (
-                    <div className="text-sm text-muted-foreground">No volume data available.</div>
+                    <div className="text-sm text-muted-foreground">
+                      No volume data available.
+                    </div>
                   )}
                 </CardContent>
               </Card>

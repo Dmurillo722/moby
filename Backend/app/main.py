@@ -1,13 +1,9 @@
 from fastapi import FastAPI
 from app.core.config import settings
 from app.core.database import init_db
-from app.websocket.alpaca_consumer import AlpacaConsumer
-from app.core.database import get_db
-from app.websocket.stream_processor import StreamProcessor
 from contextlib import asynccontextmanager
 from app.api.main import api_router
 from fastapi.middleware.cors import CORSMiddleware
-import asyncio
 import logging
 
 logger = logging.getLogger("uvicorn")
@@ -17,38 +13,7 @@ logger = logging.getLogger("uvicorn")
 async def lifespan(app: FastAPI): 
     await init_db()
     logger.info("DB initialized")
-    queue = asyncio.Queue(maxsize=5000) # using this instead of redis stream
-
-    alpaca_consumer = AlpacaConsumer(
-        logger=logger,
-        queue=queue,
-        setting=True,
-        symbols_trades=["AAPL"],
-        symbols_bars=[],
-        symbols_quotes=[]
-    )
-
-    stream_processor = StreamProcessor(
-        logger=logger,
-        worker_count=4, # we'll see what works best
-        queue=queue
-    )
-
-    consumer_task = asyncio.create_task(
-        alpaca_consumer.stream_market_data()
-    )
-    logger.info("Alpaca consumer started")
-
-    await stream_processor.start()
-    logger.info("Alpaca stream processor started")
-
-    try:
-        yield
-
-    finally:
-        logger.info("Shutting Down")
-        consumer_task.cancel()
-        await stream_processor.stop()
+    yield
 
 app = FastAPI(
     lifespan=lifespan,

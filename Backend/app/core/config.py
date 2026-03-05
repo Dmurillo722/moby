@@ -9,6 +9,7 @@ class Settings(BaseSettings):
         env_ignore_empty = True,
     )
     ENVIRONMENT: Literal["local", "production"] = "local"
+    REDIS_URL: str = "redis://localhost:6379/0"
     POSTGRES_USER: str
     POSTGRES_PASSWORD: str
     POSTGRES_DB: str

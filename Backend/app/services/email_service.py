@@ -9,7 +9,6 @@ def send_email(user_address: str, message: str, logger) -> bool:
         msg["From"] = "clientmoby@gmail.com"
         msg["To"] = user_address
         msg.set_content(message)
-
         with smtplib.SMTP("smtp.gmail.com", 587, timeout=15) as s:
             s.ehlo()
             s.starttls()

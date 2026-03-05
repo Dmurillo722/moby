@@ -19,10 +19,7 @@ router = APIRouter(prefix="/alerts", tags=["alerts"])
 
 @router.post(f"/create_alert", response_model=AlertResponseSchema)
 async def create_alert(alert_in: CreateAlertSchema, db: AsyncSession = Depends(get_db)) -> Any:
-    """
-    Create an alert using user id, symbol, and other config I think eventually instead of passing userID it'd be auth token?
-    """
-    # asset
+    # Retrieve the asset from databse
     result = await db.execute(
         select(AssetORM).where(AssetORM.symbol == alert_in.asset_symbol)
     )

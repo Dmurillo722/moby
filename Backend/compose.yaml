@@ -8,6 +8,13 @@ services:
     volumes:
       - ./app:/app/app
 
+  redis:
+    image: redis:7
+    container_name: moby-redis
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+
   db:
     image: postgres:16
     environment:
@@ -21,3 +28,4 @@ services:
 
 volumes:
   moby_db_data:
+  redis-data:

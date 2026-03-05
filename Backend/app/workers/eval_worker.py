@@ -1,4 +1,5 @@
 from app.schemas.schemas import AlpacaTrade
+from redis.exceptions import ResponseError
 import json
 import asyncio
 import logging
@@ -15,8 +16,11 @@ group_name = "eval-group"
 async def ensure_group(r):
     try:
         await r.xgroup_create(trades_stream, group_name, id="0", mkstream=True)
-    except Exception:
-        logger.error("Problem defining redis group")
+    except ResponseError as e:
+        if "BUSYGROUP" in str(e):
+            logger.info("Redis group already exists; continuing")
+            return
+        raise
 
 async def publish_jobs(r, jobs: list[dict]):
     for job in jobs:
@@ -67,7 +71,8 @@ async def main(consumer_name: str = "eval-1"):
                             logger.error("Problem doing size comparison analysis for trade")
                             continue
 
-                        notification_jobs.extend(jobs)
+                        if jobs:
+                            notification_jobs.extend(jobs)
 
                 # put notification jobs in the notification stream so the worker can deal with them
                 if notification_jobs:

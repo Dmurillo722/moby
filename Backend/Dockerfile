@@ -15,6 +15,4 @@ COPY . /app
 
 EXPOSE 8000
 
-CMD [docker run -d --name my-redis -p 6379:6379 redis:latest]
-
 CMD ["uv", "run", "uvicorn", "app.main:app", "--log-level", "info", "--reload", "--host", "0.0.0.0", "--port", "8000"]

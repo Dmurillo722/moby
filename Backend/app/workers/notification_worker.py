@@ -5,6 +5,7 @@ import logging
 from app.core.database import get_redis
 from app.core.database import AsyncSessionLocal
 import smtplib
+from redis.exceptions import ResponseError
 from email.message import EmailMessage
 from app.core.config import settings
 
@@ -15,10 +16,12 @@ group_name = "notify-group"
 # defining stream for trades in case ingestion worker (producer) is still starting
 async def ensure_group(r):
     try:
-        # using $ for the id makes it so the notification worker only works on notifications, which should avoid duplicate sends
-        await r.xgroup_create(notify_stream, group_name, id="$", mkstream=True)
-    except Exception:
-        logger.error("Problem defining redis group")
+        await r.xgroup_create(notify_stream, group_name, id="0", mkstream=True)
+    except ResponseError as e:
+        if "BUSYGROUP" in str(e):
+            logger.info("Redis group already exists; continuing")
+            return
+        raise
 
 async def main(consumer_name: str = "notify-1"):
     logger.info("Starting Notification Worker")
@@ -48,26 +51,37 @@ async def main(consumer_name: str = "notify-1"):
                         job = json.loads(payload)
                         try:
                             ah = AlertEventHistory(
-                                alert_id = job.alert_id,
-                                confidence = f"{job.size}"
+                                alert_id=job["alert_id"],
+                                confidence=str(job.get("size", "")),
                             )
                             db.add(ah)
-                        except:
-                            logger.Error("Problem adding alert event to DB.")
+                        except Exception:
+                            logger.exception("Problem adding alert event to DB")
 
-                        if job.email_flag == True:
+                        if job.get("email_flag") is True:
                             try: 
                                 msg = EmailMessage()
                                 msg["Subject"] = "Moby Alert"
                                 msg["From"] = "clientmoby@gmail.com"
-                                msg["To"] = job.user_email
-                                message = f"Moby possible whale activity detected for {job.symbol}, trade with size: {job.size} exceeding threshold ... (etc)"
+                                msg["To"] = job["user_email"]
+                                message = (
+                                    f"Moby possible whale activity detected for {job.get('symbol')}, "
+                                    f"trade with size: {job.get('size')} exceeding threshold ... (etc)"
+                                )
                                 msg.set_content(message)
                                 s.send_message(msg)
-                            except:
-                                logger.error(f"Problem sending alert via email to recipient {job.user_email}")
+                            except Exception:
+                                logger.exception(
+                                    "Problem sending alert via email to recipient %s",
+                                    job.get("user_email"),
+                                )
                             
                         await r.xack(notify_stream, group_name, msg_id)
+
+                try:
+                    await db.commit()
+                except Exception:
+                    logger.exception("Problem committing alert history events")
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)

@@ -58,8 +58,7 @@ class RollingVolumeTracker:
     
     def is_empty(self):
         return len(self.bars) == 0
-        
-        
+               
 
         
         

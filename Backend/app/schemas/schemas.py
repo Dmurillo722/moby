@@ -1,10 +1,7 @@
 # PDYANTIC SCHEMAS FOR API HEADERS, RESPONSE FORMAT, etc. 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, EmailStr
 from typing import Optional, List
 from datetime import datetime
-
-from pydantic import BaseModel, ConfigDict, Field
-from typing import Optional
 from decimal import Decimal
 
 class PostBase(BaseModel):
@@ -91,3 +88,23 @@ class AlpacaTrade(BaseModel):
 
     class Config:
         populate_by_name = True
+
+# user authentication begin
+class UserRegister(PostBase):
+    email: EmailStr
+    password: str
+    name: Optional[str] = None
+    phone: Optional[str] = None
+
+
+class UserLogin(PostBase):
+    email: EmailStr
+    password: str
+
+
+class UserResponse(ResponseBase):
+    id: int
+    email: EmailStr
+    name: Optional[str]
+    phone: Optional[str]
+    

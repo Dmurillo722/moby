@@ -9,8 +9,8 @@ from app.models.models import (
 )
 
 # proof of concept alert gen
-async def trade_size_comparison(trade: AlpacaTrade, db: AsyncSession, logger):
-    if trade.size >= 200: # example
+async def trade_size_comparison(trade: AlpacaTrade, db: AsyncSession, logger, size: int = 1000):
+    if trade.size >= size: # example
         logger.info("generating alert ...")
         stmt = (
             select(AlertORM)

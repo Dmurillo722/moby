@@ -106,7 +106,7 @@ class MultiTimeFrameAnalyzer:
         for bar in reversed(self.bars):
             if bar["t"] >= cutoff:
             
-        
+    
 
 
 

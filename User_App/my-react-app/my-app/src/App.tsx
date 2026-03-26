@@ -4,20 +4,30 @@ import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
 import Watchlists from './pages/Watchlists';
 import Alerts from './pages/Alerts';
+import { WatchlistProvider } from './context/WatchlistContext';
 import './App.css';
 
 function App() {
   return (
-    <Router>
-      <Layout>
-        <Routes>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/watchlists" element={<Watchlists />} />
-          <Route path="/alerts" element={<Alerts />} />
-          <Route path="/settings" element={<div className="text-foreground text-2xl font-bold">Settings - Coming Soon</div>} />
-        </Routes>
-      </Layout>
-    </Router>
+    <WatchlistProvider>
+      <Router>
+        <Layout>
+          <Routes>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/watchlists" element={<Watchlists />} />
+            <Route path="/alerts" element={<Alerts />} />
+            <Route
+              path="/settings"
+              element={
+                <div className="text-foreground text-2xl font-bold">
+                  Settings — Coming Soon
+                </div>
+              }
+            />
+          </Routes>
+        </Layout>
+      </Router>
+    </WatchlistProvider>
   );
 }
 

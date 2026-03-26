@@ -8,12 +8,12 @@ import smtplib
 from redis.exceptions import ResponseError
 from email.message import EmailMessage
 from app.core.config import settings
+from datetime import datetime
 
 logger = logging.getLogger("eval")
 notify_stream = "moby:notifications"
 group_name = "notify-group"
 
-# defining stream for trades in case ingestion worker (producer) is still starting
 async def ensure_group(r):
     try:
         await r.xgroup_create(notify_stream, group_name, id="0", mkstream=True)
@@ -27,18 +27,18 @@ async def main(consumer_name: str = "notify-1"):
     logger.info("Starting Notification Worker")
     r = get_redis()
     await ensure_group(r)
-    
+
     while True:
         resp = await r.xreadgroup(
             groupname=group_name,
             consumername=consumer_name,
             streams={notify_stream: ">"},
-            count=50, 
+            count=50,
             block=5000
         )
         if not resp:
             continue
-        
+
         with smtplib.SMTP("smtp.gmail.com", 587, timeout=15) as s:
             s.ehlo()
             s.starttls()
@@ -49,33 +49,42 @@ async def main(consumer_name: str = "notify-1"):
                     for msg_id, fields in messages:
                         payload = fields['payload']
                         job = json.loads(payload)
+
                         try:
                             ah = AlertEventHistory(
                                 alert_id=job["alert_id"],
-                                confidence=str(job.get("size", "")),
+                                confidence="",
+                                symbol=job.get("symbol"),
+                                price=job.get("price"),
+                                size=job.get("size"),
+                                exchange=job.get("exchange"),
+                                trade_id=job.get("trade_id"),
+                                conditions=",".join(job.get("conditions") or []),
+                                tape=job.get("tape"),
+                                trade_timestamp=datetime.fromisoformat(job["trade_timestamp"]).replace(tzinfo=None) if job.get("trade_timestamp") else None,
+
                             )
                             db.add(ah)
                         except Exception:
                             logger.exception("Problem adding alert event to DB")
 
                         if job.get("email_flag") is True:
-                            try: 
+                            try:
                                 msg = EmailMessage()
                                 msg["Subject"] = "Moby Alert"
                                 msg["From"] = "clientmoby@gmail.com"
                                 msg["To"] = job["user_email"]
-                                message = (
+                                msg.set_content(
                                     f"Moby possible whale activity detected for {job.get('symbol')}, "
                                     f"trade with size: {job.get('size')} exceeding threshold ... (etc)"
                                 )
-                                msg.set_content(message)
                                 s.send_message(msg)
                             except Exception:
                                 logger.exception(
                                     "Problem sending alert via email to recipient %s",
                                     job.get("user_email"),
                                 )
-                            
+
                         await r.xack(notify_stream, group_name, msg_id)
 
                 try:

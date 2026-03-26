@@ -8,10 +8,8 @@ from redis.exceptions import RedisError, ResponseError
 from app.core.database import get_redis
 from detection_engine.volume_analyzer import VolumeAnalyzer
 
-#the worker maintains a dict[str, volumeAnalyzer] where:
-#the key is the symbol and the value is a volumeAnalyzer object that maintains a deque of bars for that symbol and performs the 
-#necessary calculations to determine if a signal should be generated
-
-#when a bar arrices,  look up or create the analyzer for that symbol, call process_bar(), and evaluate the result
-#all deque based windowing stays in process memory, with a max of 30 symbols, with windows no larger than 5-10 minutes, this should be very manageable in memory and fast to process
+"""
+Pure analysis process meant to read bars, run analysis, and publish signals that meet some determined threshold. 
+This worker won't interact with the database, instead just consuming bar data and telling the other workers when to send the alerts
+"""
 

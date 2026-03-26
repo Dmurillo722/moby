@@ -62,6 +62,7 @@ async def main(consumer_name: str = "eval-1"):
                             continue
                         try:
                             trade = AlpacaTrade(**event) # unpack into trade schema to validate types
+                            logger.info(trade)
                         except Exception:
                             logger.warning("Schema couldn't validate trade message, skipping")
                             continue

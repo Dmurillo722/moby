@@ -63,7 +63,14 @@ class VolumeImpactMethod(BaseAnalysisMethod):
     def classify(self, impact_ratio, window_minutes):
         """Classify impact using per-timeframe thresholds called by the orchestrator after compute to add easily identifiable classifications to the results"""
 
-        pass
+        t = self._get_thresholds(window_minutes)
+        if impact_ratio >= t["Extreme"]:
+            return "Extreme"
+        elif impact_ratio >= t["Significant"]:
+            return "Significant"
+        elif impact_ratio >= t["Minor"]:
+            return "Minor"
+        return "Normal"
 
     
     def _get_thresholds(self, window_minutes):

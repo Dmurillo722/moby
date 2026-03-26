@@ -8,6 +8,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useAuth } from "@/context/AuthContext";
 import { Badge } from "@/components/ui/badge";
 import { Activity } from "lucide-react";
 import {
@@ -17,12 +18,18 @@ import {
 
 function formatTime(iso?: string) {
   if (!iso) return "—";
-  return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  return new Date(iso).toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 function formatDate(iso?: string) {
   if (!iso) return "—";
-  return new Date(iso).toLocaleDateString([], { month: "short", day: "numeric" });
+  return new Date(iso).toLocaleDateString([], {
+    month: "short",
+    day: "numeric",
+  });
 }
 
 function formatPrice(price?: number) {
@@ -35,7 +42,13 @@ function formatSize(size?: number) {
   return size.toLocaleString();
 }
 
-function DetailField({ label, value }: { label: string; value: React.ReactNode }) {
+function DetailField({
+  label,
+  value,
+}: {
+  label: string;
+  value: React.ReactNode;
+}) {
   return (
     <div>
       <dt className="text-xs text-muted-foreground uppercase tracking-wide mb-1">
@@ -49,14 +62,15 @@ function DetailField({ label, value }: { label: string; value: React.ReactNode }
 }
 
 const Alerts = () => {
-  const userId = 1;
-
+  const { user } = useAuth();
+  const userId = user?.id;
   const [alerts, setAlerts] = useState<AlertHistoryItem[]>([]);
   const [selected, setSelected] = useState<AlertHistoryItem | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!userId) return;
     let cancelled = false;
     (async () => {
       try {
@@ -76,29 +90,42 @@ const Alerts = () => {
         if (!cancelled) setLoading(false);
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [userId]);
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight text-foreground">Alerts</h1>
-        {loading && <p className="text-sm text-muted-foreground mt-1">Loading…</p>}
+        <h1 className="text-3xl font-bold tracking-tight text-foreground">
+          Alerts
+        </h1>
+        {loading && (
+          <p className="text-sm text-muted-foreground mt-1">Loading…</p>
+        )}
         {error && <p className="text-sm text-red-500 mt-1">{error}</p>}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-
         <div className="lg:col-span-2">
           <Card className="border-border">
             <CardContent className="p-0">
               <Table>
                 <TableHeader>
                   <TableRow className="bg-muted/50 hover:bg-muted/50 border-border">
-                    <TableHead className="text-muted-foreground font-semibold">Time</TableHead>
-                    <TableHead className="text-muted-foreground font-semibold">Symbol</TableHead>
-                    <TableHead className="text-muted-foreground font-semibold text-right">Price</TableHead>
-                    <TableHead className="text-muted-foreground font-semibold text-right">Size</TableHead>
+                    <TableHead className="text-muted-foreground font-semibold">
+                      Time
+                    </TableHead>
+                    <TableHead className="text-muted-foreground font-semibold">
+                      Symbol
+                    </TableHead>
+                    <TableHead className="text-muted-foreground font-semibold text-right">
+                      Price
+                    </TableHead>
+                    <TableHead className="text-muted-foreground font-semibold text-right">
+                      Size
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
 
@@ -112,8 +139,12 @@ const Alerts = () => {
                       }`}
                     >
                       <TableCell className="text-muted-foreground">
-                        <div className="font-medium text-sm">{formatTime(alert.sent)}</div>
-                        <div className="text-xs text-muted-foreground/60">{formatDate(alert.sent)}</div>
+                        <div className="font-medium text-sm">
+                          {formatTime(alert.sent)}
+                        </div>
+                        <div className="text-xs text-muted-foreground/60">
+                          {formatDate(alert.sent)}
+                        </div>
                       </TableCell>
 
                       <TableCell>
@@ -134,7 +165,10 @@ const Alerts = () => {
 
                   {!loading && alerts.length === 0 && !error && (
                     <TableRow>
-                      <TableCell colSpan={4} className="text-sm text-muted-foreground py-8 text-center">
+                      <TableCell
+                        colSpan={4}
+                        className="text-sm text-muted-foreground py-8 text-center"
+                      >
                         No alerts yet.
                       </TableCell>
                     </TableRow>
@@ -157,7 +191,10 @@ const Alerts = () => {
                     </CardTitle>
                   </div>
                   {selected.symbol && (
-                    <Badge variant="outline" className="font-mono text-base px-3">
+                    <Badge
+                      variant="outline"
+                      className="font-mono text-base px-3"
+                    >
                       {selected.symbol}
                     </Badge>
                   )}
@@ -165,16 +202,19 @@ const Alerts = () => {
               </CardHeader>
 
               <CardContent className="p-6 space-y-6">
-
                 <div className="grid grid-cols-2 gap-4 pb-4 border-b border-border">
                   <div>
-                    <dt className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Price</dt>
+                    <dt className="text-xs text-muted-foreground uppercase tracking-wide mb-1">
+                      Price
+                    </dt>
                     <dd className="text-3xl font-bold font-mono text-foreground">
                       {formatPrice(selected.price)}
                     </dd>
                   </div>
                   <div>
-                    <dt className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Trade size</dt>
+                    <dt className="text-xs text-muted-foreground uppercase tracking-wide mb-1">
+                      Trade size
+                    </dt>
                     <dd className="text-3xl font-bold font-mono text-foreground">
                       {formatSize(selected.size)}
                     </dd>
@@ -190,26 +230,37 @@ const Alerts = () => {
                         : undefined
                     }
                   />
-                  <DetailField label="Alert detected" value={`${formatDate(selected.sent)} ${formatTime(selected.sent)}`} />
+                  <DetailField
+                    label="Alert detected"
+                    value={`${formatDate(selected.sent)} ${formatTime(selected.sent)}`}
+                  />
                   <DetailField label="Exchange" value={selected.exchange} />
                   <DetailField label="Tape" value={selected.tape} />
-                  <DetailField label="Trade ID" value={selected.trade_id?.toString()} />
-                  <DetailField label="Alert ID" value={`#${selected.alert_id}`} />
+                  <DetailField
+                    label="Trade ID"
+                    value={selected.trade_id?.toString()}
+                  />
+                  <DetailField
+                    label="Alert ID"
+                    value={`#${selected.alert_id}`}
+                  />
                   <div className="col-span-2">
                     <DetailField
                       label="Conditions"
                       value={
-                        selected.conditions
-                          ? (
-                            <div className="flex flex-wrap gap-1 mt-1">
-                              {selected.conditions.split(",").map((c) => (
-                                <Badge key={c} variant="outline" className="font-mono text-xs">
-                                  {c.trim()}
-                                </Badge>
-                              ))}
-                            </div>
-                          )
-                          : undefined
+                        selected.conditions ? (
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {selected.conditions.split(",").map((c) => (
+                              <Badge
+                                key={c}
+                                variant="outline"
+                                className="font-mono text-xs"
+                              >
+                                {c.trim()}
+                              </Badge>
+                            ))}
+                          </div>
+                        ) : undefined
                       }
                     />
                   </div>
@@ -224,7 +275,6 @@ const Alerts = () => {
             )
           )}
         </div>
-
       </div>
     </div>
   );

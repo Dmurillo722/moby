@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { useAuth } from "@/context/AuthContext";
 import { X, Plus, Bell, Trash2 } from "lucide-react";
 import MiniChart from "@/components/MiniChart";
 import { useWatchlist } from "@/context/WatchlistContext";
@@ -23,7 +24,8 @@ const CreateAlertModal = ({
   onClose: () => void;
   onCreated: () => void;
 }) => {
-  const userId = 1;
+  const { user } = useAuth();
+  const userId = user?.id;
   const [alertType, setAlertType] = useState<AlertTypeName>("size");
   const [threshold, setThreshold] = useState("");
   const [email, setEmail] = useState(true);
@@ -42,7 +44,7 @@ const CreateAlertModal = ({
       setLoading(true);
       setError(null);
       await createAlert({
-        user_id: userId,
+        user_id: userId!,
         asset_symbol: symbol,
         alert_type: alertType,
         threshold: thr,
@@ -97,8 +99,8 @@ const CreateAlertModal = ({
                         !opt.available
                           ? "opacity-40 cursor-not-allowed border-border"
                           : alertType === opt.value
-                          ? "border-primary bg-accent/30"
-                          : "border-border hover:bg-accent/20"
+                            ? "border-primary bg-accent/30"
+                            : "border-border hover:bg-accent/20"
                       }`}
                     >
                       <input
@@ -114,7 +116,10 @@ const CreateAlertModal = ({
                         <div className="text-sm font-medium text-foreground flex items-center gap-2">
                           {opt.label}
                           {!opt.available && (
-                            <Badge variant="outline" className="text-xs px-1.5 py-0">
+                            <Badge
+                              variant="outline"
+                              className="text-xs px-1.5 py-0"
+                            >
                               Soon
                             </Badge>
                           )}
@@ -268,7 +273,8 @@ const SymbolCard = ({
 };
 
 const Watchlists = () => {
-  const userId = 1;
+  const { user } = useAuth();
+  const userId = user?.id;
   const { symbols, addSymbol, removeSymbol } = useWatchlist();
   const [input, setInput] = useState("");
   const [inputError, setInputError] = useState<string | null>(null);
@@ -276,6 +282,7 @@ const Watchlists = () => {
   const [alertConfigs, setAlertConfigs] = useState<AlertConfig[]>([]);
 
   const fetchAlerts = useCallback(async () => {
+    if (!userId) return;
     try {
       const data = await listAlerts(userId);
       setAlertConfigs(Array.isArray(data) ? data : []);
@@ -349,9 +356,7 @@ const Watchlists = () => {
         </div>
       </div>
 
-      {inputError && (
-        <p className="text-sm text-red-500 -mt-4">{inputError}</p>
-      )}
+      {inputError && <p className="text-sm text-red-500 -mt-4">{inputError}</p>}
 
       {symbols.length === 0 ? (
         <div className="flex items-center justify-center h-48 text-sm text-muted-foreground border border-dashed border-border rounded-lg">

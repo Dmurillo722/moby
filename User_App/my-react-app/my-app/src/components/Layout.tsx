@@ -1,21 +1,23 @@
-import React from 'react';
-import { Link, useLocation } from 'react-router-dom';
-import { 
-  LayoutDashboard, 
-  ListChecks, 
-  Bell, 
-  Settings, 
+import React from "react";
+import { Link, useLocation } from "react-router-dom";
+import { useAuth } from "@/context/AuthContext";
+import {
+  LayoutDashboard,
+  ListChecks,
+  Bell,
+  Settings,
   LogOut,
-  User
-} from 'lucide-react';
+  User,
+} from "lucide-react";
 
 const Layout = ({ children }: { children: React.ReactNode }) => {
+  const { user, logout } = useAuth();
   const location = useLocation();
-  
+
   const navigation = [
-    { name: 'Dashboard', href: '/', icon: LayoutDashboard },
-    { name: 'Watchlists', href: '/watchlists', icon: ListChecks },
-    { name: 'Alerts', href: '/alerts', icon: Bell },
+    { name: "Dashboard", href: "/", icon: LayoutDashboard },
+    { name: "Watchlists", href: "/watchlists", icon: ListChecks },
+    { name: "Alerts", href: "/alerts", icon: Bell },
   ];
 
   const isActive = (path: string) => location.pathname === path;
@@ -24,7 +26,9 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
     <div className="flex h-screen bg-background dark">
       <aside className="w-48 bg-card border-r border-border flex flex-col">
         <div className="p-6 border-b border-border">
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">Moby</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">
+            Moby
+          </h1>
         </div>
 
         <nav className="flex-1 px-3 py-6 space-y-1">
@@ -36,8 +40,8 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
                 to={item.href}
                 className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
                   isActive(item.href)
-                    ? 'bg-accent text-accent-foreground'
-                    : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'
+                    ? "bg-accent text-accent-foreground"
+                    : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
                 }`}
               >
                 <Icon className="w-4 h-4" />
@@ -51,17 +55,15 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
           <Link
             to="/settings"
             className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
-              isActive('/settings')
-                ? 'bg-accent text-accent-foreground'
-                : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'
+              isActive("/settings")
+                ? "bg-accent text-accent-foreground"
+                : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
             }`}
           >
             <Settings className="w-4 h-4" />
             Settings
           </Link>
-          <button
-            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:bg-accent/50 hover:text-foreground transition-all"
-          >
+          <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:bg-accent/50 hover:text-foreground transition-all">
             <LogOut className="w-4 h-4" />
             Log Out
           </button>
@@ -74,14 +76,22 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2 px-3 py-1.5 bg-accent rounded-full border border-border">
               <User className="w-4 h-4 text-muted-foreground" />
-              <span className="text-sm font-medium text-foreground">Maanas Kotha</span>
+              <span className="text-sm font-medium text-foreground">
+                {user?.name ?? "Guest"}
+              </span>
             </div>
+            {user && (
+              <button
+                onClick={logout}
+                className="text-sm text-muted-foreground hover:text-foreground"
+              >
+                Sign out
+              </button>
+            )}
           </div>
         </header>
 
-        <div className="flex-1 overflow-auto p-8 bg-background">
-          {children}
-        </div>
+        <div className="flex-1 overflow-auto p-8 bg-background">{children}</div>
       </main>
     </div>
   );

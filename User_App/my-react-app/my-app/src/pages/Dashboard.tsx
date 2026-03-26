@@ -1,37 +1,56 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
-  Table, TableBody, TableCell, TableHead,
-  TableHeader, TableRow,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
 import { TrendingUp, TrendingDown, RefreshCw } from "lucide-react";
 import { useWatchlist } from "@/context/WatchlistContext";
 import { getAlertHistory } from "@/endpoint_connections/alerts_endpoint";
-import { getStockNews, getMarketNews } from "@/endpoint_connections/news_endpoint";
+import {
+  getStockNews,
+  getMarketNews,
+} from "@/endpoint_connections/news_endpoint";
 import { getInsiderSentiment } from "@/endpoint_connections/sentiment_endpoint";
 import TickerTape from "@/components/TickerTape";
 import type {
-  AlertHistoryItem, MarketNewsItem,
-  CompanyNewsItem, InsiderSentimentResponse,
+  AlertHistoryItem,
+  MarketNewsItem,
+  CompanyNewsItem,
+  InsiderSentimentResponse,
 } from "@/lib/types";
 import {
-  timeAgoFromUnixSeconds, formatTime, formatDate,
-  formatPrice, formatSize, delay,
+  timeAgoFromUnixSeconds,
+  formatTime,
+  formatDate,
+  formatPrice,
+  formatSize,
+  delay,
 } from "@/lib/utils";
 
 const newsCache = new Map<string, CompanyNewsItem[]>();
 const sentimentCache = new Map<string, InsiderSentimentResponse>();
 
 const Dashboard = () => {
-  const userId = 1;
+  const { user } = useAuth();
+  const userId = user?.id;
   const { symbols } = useWatchlist();
   const [marketNews, setMarketNews] = useState<MarketNewsItem[]>([]);
   const [marketNewsLoading, setMarketNewsLoading] = useState(false);
   const [marketNewsError, setMarketNewsError] = useState<string | null>(null);
-  const [newsBySymbol, setNewsBySymbol] = useState<Record<string, CompanyNewsItem[]>>({});
-  const [sentimentBySymbol, setSentimentBySymbol] = useState<Record<string, InsiderSentimentResponse>>({});
+  const [newsBySymbol, setNewsBySymbol] = useState<
+    Record<string, CompanyNewsItem[]>
+  >({});
+  const [sentimentBySymbol, setSentimentBySymbol] = useState<
+    Record<string, InsiderSentimentResponse>
+  >({});
   const [symbolDataLoading, setSymbolDataLoading] = useState(false);
   const [symbolDataError, setSymbolDataError] = useState<string | null>(null);
   const [recentAlerts, setRecentAlerts] = useState<AlertHistoryItem[]>([]);
@@ -49,12 +68,16 @@ const Dashboard = () => {
         setMarketNews(Array.isArray(data) ? data : []);
       } catch (e: unknown) {
         if (cancelled) return;
-        setMarketNewsError(e instanceof Error ? e.message : "Failed to load market news");
+        setMarketNewsError(
+          e instanceof Error ? e.message : "Failed to load market news",
+        );
       } finally {
         if (!cancelled) setMarketNewsLoading(false);
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const fetchAlerts = useCallback(async () => {
@@ -148,16 +171,19 @@ const Dashboard = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
-
           <Card className="border-border">
             <CardHeader className="border-b border-border bg-card flex flex-row items-center justify-between">
               <CardTitle className="text-lg font-semibold text-foreground flex items-center gap-2">
                 Recent Alerts
                 {alertsLoading && (
-                  <span className="text-xs text-muted-foreground font-normal">Loading…</span>
+                  <span className="text-xs text-muted-foreground font-normal">
+                    Loading…
+                  </span>
                 )}
                 {alertsError && (
-                  <span className="text-xs text-red-500 font-normal">{alertsError}</span>
+                  <span className="text-xs text-red-500 font-normal">
+                    {alertsError}
+                  </span>
                 )}
               </CardTitle>
               <Button
@@ -166,7 +192,9 @@ const Dashboard = () => {
                 variant="secondary"
                 size="sm"
               >
-                <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${alertsLoading ? "animate-spin" : ""}`} />
+                <RefreshCw
+                  className={`w-3.5 h-3.5 mr-1.5 ${alertsLoading ? "animate-spin" : ""}`}
+                />
                 Refresh
               </Button>
             </CardHeader>
@@ -175,10 +203,18 @@ const Dashboard = () => {
               <Table>
                 <TableHeader>
                   <TableRow className="bg-muted/50 hover:bg-muted/50 border-border">
-                    <TableHead className="text-muted-foreground font-semibold">Time</TableHead>
-                    <TableHead className="text-muted-foreground font-semibold">Symbol</TableHead>
-                    <TableHead className="text-muted-foreground font-semibold text-right">Price</TableHead>
-                    <TableHead className="text-muted-foreground font-semibold text-right">Size</TableHead>
+                    <TableHead className="text-muted-foreground font-semibold">
+                      Time
+                    </TableHead>
+                    <TableHead className="text-muted-foreground font-semibold">
+                      Symbol
+                    </TableHead>
+                    <TableHead className="text-muted-foreground font-semibold text-right">
+                      Price
+                    </TableHead>
+                    <TableHead className="text-muted-foreground font-semibold text-right">
+                      Size
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -205,16 +241,18 @@ const Dashboard = () => {
                     </TableRow>
                   ))}
 
-                  {!alertsLoading && recentAlerts.length === 0 && !alertsError && (
-                    <TableRow>
-                      <TableCell
-                        colSpan={4}
-                        className="text-sm text-muted-foreground py-8 text-center"
-                      >
-                        No alerts yet.
-                      </TableCell>
-                    </TableRow>
-                  )}
+                  {!alertsLoading &&
+                    recentAlerts.length === 0 &&
+                    !alertsError && (
+                      <TableRow>
+                        <TableCell
+                          colSpan={4}
+                          className="text-sm text-muted-foreground py-8 text-center"
+                        >
+                          No alerts yet.
+                        </TableCell>
+                      </TableRow>
+                    )}
                 </TableBody>
               </Table>
             </CardContent>
@@ -252,9 +290,15 @@ const Dashboard = () => {
               <Table>
                 <TableHeader>
                   <TableRow className="bg-muted/50 hover:bg-muted/50 border-border">
-                    <TableHead className="text-muted-foreground font-semibold">Symbol</TableHead>
-                    <TableHead className="text-muted-foreground font-semibold">Insider MSPR</TableHead>
-                    <TableHead className="text-muted-foreground font-semibold">Top News</TableHead>
+                    <TableHead className="text-muted-foreground font-semibold">
+                      Symbol
+                    </TableHead>
+                    <TableHead className="text-muted-foreground font-semibold">
+                      Insider MSPR
+                    </TableHead>
+                    <TableHead className="text-muted-foreground font-semibold">
+                      Top News
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -380,7 +424,9 @@ const Dashboard = () => {
                       </span>
                       {news.datetime ? (
                         <>
-                          <span className="text-xs text-muted-foreground/40">·</span>
+                          <span className="text-xs text-muted-foreground/40">
+                            ·
+                          </span>
                           <span className="text-xs text-muted-foreground">
                             {timeAgoFromUnixSeconds(news.datetime)}
                           </span>
@@ -390,11 +436,13 @@ const Dashboard = () => {
                   </a>
                 ))}
 
-                {!marketNewsLoading && marketNews.length === 0 && !marketNewsError && (
-                  <p className="text-sm text-muted-foreground py-4 text-center">
-                    No market news returned.
-                  </p>
-                )}
+                {!marketNewsLoading &&
+                  marketNews.length === 0 &&
+                  !marketNewsError && (
+                    <p className="text-sm text-muted-foreground py-4 text-center">
+                      No market news returned.
+                    </p>
+                  )}
               </div>
             </CardContent>
           </Card>

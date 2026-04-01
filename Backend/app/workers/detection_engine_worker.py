@@ -3,10 +3,12 @@ from collections import deque
 from datetime import datetime, timedelta, timezone
 import json
 import asyncio
+from app.core.database import AsyncSessionLocal
 import logging
+from app.schemas.schemas import AlpacaBar
 from redis.exceptions import RedisError, ResponseError
 from app.core.database import get_redis
-from detection_engine.methods.analyzer import SymbolAnalyzer
+from detection_engine.methods.analyzer import SymbolAnalyzer, default_analyzer
 
 """
 Pure analysis process meant to read bars, run analysis, and publish signals that meet some determined threshold. 
@@ -17,6 +19,8 @@ logger = logging.getLogger("detection")
 bars_stream = "moby:bars"
 signals_stream = "moby:signals"
 group_name = "detection-group"
+
+publish_threshold = {"strong", "moderate"}
 
 #copy of the version used in eval but with the stream name changed to bars, we can also add some error handling here in case the stream doesn't exist yet for some reason, or the redis connection is having issues, etc.
 #maybe better to have a separate file with parametrized versions of helpers in the future?
@@ -34,7 +38,7 @@ async def publish_jobs(r, jobs: list[dict]):
         await r.xadd(
             signals_stream, 
             {
-                "payload": json.dumps(job)
+                "payload": json.dumps(job, default=str)
             },
         )
 
@@ -52,7 +56,7 @@ async def main(consumer_name: str = "detection-1"):
     while True:
         resp = await r.xreadgroup(
             groupname = group_name,
-            consumer_name = consumer_name,
+            consumername = consumer_name,
             streams = {bars_stream: ">"}, 
             #max number of minute bars we will use at any given time is 30
             count = 900,
@@ -71,25 +75,65 @@ async def main(consumer_name: str = "detection-1"):
             for msg_id, fields in messages:
             #payload is a json string defining the bar, parse it for bar data
                 payload = fields['payload']
-                bar = json.loads(payload)
-                symbol = bar["S"]
+                bars = json.loads(payload)
+                #bars will be list regardless if there is only one or more
+                events = bars if isinstance(bars, list) else [bars]
+
+                async with AsyncSessionLocal() as db:
+                    for event in events:
+                        #our analyzer only uses minute bars
+                        if event.ghet("T") != "b":
+                            continue
                     
-                #add symbol to analyzer dict if not already there
-                #for now until we implement more user customization of analysis we can have the analyzer default
-                #to using all potentially relevant timeframes (we can also have this be expected behavior but display more info to the user)
-                if symbol not in analyzerDict:
-                    analyzerDict[symbol] = SymbolAnalyzer.default_analyzer(symbol)
+                        try:
+                            event["t"] = datetime.fromisoformat(event["t"].replace("Z", "+00:00"))
+                        except (ValueError, TypeError, KeyError):
+                            logger.warning("Malformed timestamp for bar, skipping")
+                            continue
+
+                        
+                        symbol = event.get("S")
+
+                        if not symbol:
+                            continue
+                        #add symbol to analyzer dict if not already there
+                        #for now until we implement more user customization of analysis we can have the analyzer default
+                        #to using all potentially relevant timeframes 
+                        # (we can also have this be expected behavior but display more info to the user)
+
+                        if symbol not in analyzerDict:
+                            analyzerDict[symbol] = default_analyzer(symbol)
+                            logger.info("Created analyzer for: %s", symbol)
+
+                        
+                        #process the bar through the relevant analyzer
+                        #idea is to update the relevant analyzer object and return the results upon
+                        #each bar being processed. We can add thesese results to another dict with
+                        #each of the corresponding symbols and then have the alerts gen
+                        try:
+                           result = analyzerDict[symbol].process_bar(event)
+                        except Exception:
+                            logger.exception("Analysis failed for %s", symbol)
+                            continue
+                        
+
+                        strength = result["convergence"].get("signal_strength", "none")
+                        
+                        if strength in publish_threshold:
+                            notification_jobs.append(result)
+                            logger.info(
+                                "SIGNAL %s strength=%s dir=%s",
+                                symbol,
+                                strength,
+                                result["convergence"].get("ofi_direction")
+                            )
                     
-
-                #process the bar through the relevant analyzer
-                #idea is to update the relevant analyzer object and return the results upon
-                #each bar being processed. We can add thesese results to another dict with
-                #each of the corresponding symbols and then have the alerts generated based on this
-                result = analyzerDict[symbol].process_bar(bar)
-
-        if notification_jobs:
-            await publish_jobs(r, notification_jobs)
-
+                    if notification_jobs:
+                        await publish_jobs(bars_stream, notification_jobs)
+                    
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
+    asyncio.run(main())
                     
                     
                     

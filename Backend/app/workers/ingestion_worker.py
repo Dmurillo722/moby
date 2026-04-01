@@ -8,6 +8,7 @@ from app.core.database import get_redis
 
 logger = logging.getLogger("ingest")
 trades_stream = "moby:trades"
+bars_stream = "moby:bars"
 
 async def main():
     r = get_redis() 
@@ -29,7 +30,19 @@ async def main():
                 await ws.send(json.dumps(subscribe_message))
                 logger.info("Subscription success, receiving data from Alpaca")
                 async for message in ws:
-                    await r.xadd(trades_stream, {"payload": message}, maxlen=200_000, approximate=True)
+                    #adding functionality for handling bar data as well
+                    events = json.loads(message)
+
+                    if not isinstance(events, list):
+                        events = [events]
+
+                    for event in events:
+                        msg_type = event.get('T')
+                        if msg_type == 'b':#bars
+                            await r.xadd(bars_stream, {"payload": json.dumps(event)}, maxlen=200_000, approximate=True)
+                        elif msg_type == 't':#trades
+                            #event wrapped in a list as the eval worker expects one to loop through 
+                            await r.xadd(trades_stream, {"payload": json.dumps([event])}, maxlen=200_000, approximate=True)
 
         except Exception:
             logger.error("Problem connecting to Alpaca, retrying momentarily ...")

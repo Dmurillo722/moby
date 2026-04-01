@@ -3,12 +3,12 @@ from collections import deque
 from datetime import datetime, timedelta, timezone
 import json
 import asyncio
-from app.core.database import AsyncSessionLocal
+from app.core.database import AsyncSessionLocal, get_redis
 import logging
 from app.schemas.schemas import AlpacaBar
 from redis.exceptions import RedisError, ResponseError
 from app.core.database import get_redis
-from detection_engine.methods.analyzer import SymbolAnalyzer, default_analyzer
+from detection_engine.volume.analyzer import SymbolAnalyzer, default_analyzer
 
 """
 Pure analysis process meant to read bars, run analysis, and publish signals that meet some determined threshold. 
@@ -47,7 +47,6 @@ async def main(consumer_name: str = "detection-1"):
     logger.info("Starting Detection Engine Worker")
     r = get_redis()
     await ensure_group(r)
-    #volume_analyzer = SymbolAnalyzer()
 
     # symbol : analyzer object mapping to maintain state across bars for each symbol we are tracking
     # automatically updated when bars come in for symbols we have subscribed to
@@ -79,57 +78,63 @@ async def main(consumer_name: str = "detection-1"):
                 #bars will be list regardless if there is only one or more
                 events = bars if isinstance(bars, list) else [bars]
 
-                async with AsyncSessionLocal() as db:
-                    for event in events:
-                        #our analyzer only uses minute bars
-                        if event.ghet("T") != "b":
-                            continue
+                
+                for event in events:
+                    #our analyzer only uses minute bars
+                    if event.get("T") != "b":
+                        continue
                     
-                        try:
-                            event["t"] = datetime.fromisoformat(event["t"].replace("Z", "+00:00"))
-                        except (ValueError, TypeError, KeyError):
-                            logger.warning("Malformed timestamp for bar, skipping")
-                            continue
+                    try:
+                        event["t"] = datetime.fromisoformat(event["t"].replace("Z", "+00:00"))
+                    except (ValueError, TypeError, KeyError):
+                        logger.warning("Malformed timestamp for bar, skipping")
+                        continue
 
                         
-                        symbol = event.get("S")
+                    symbol = event.get("S")
 
-                        if not symbol:
-                            continue
-                        #add symbol to analyzer dict if not already there
-                        #for now until we implement more user customization of analysis we can have the analyzer default
-                        #to using all potentially relevant timeframes 
-                        # (we can also have this be expected behavior but display more info to the user)
+                    if not symbol:
+                        continue
+                    #add symbol to analyzer dict if not already there
+                    #for now until we implement more user customization of analysis we can have the analyzer default
+                    #to using all potentially relevant timeframes 
+                    # (we can also have this be expected behavior but display more info to the user)
 
-                        if symbol not in analyzerDict:
-                            analyzerDict[symbol] = default_analyzer(symbol)
-                            logger.info("Created analyzer for: %s", symbol)
+                    if symbol not in analyzerDict:
+                        analyzerDict[symbol] = default_analyzer(symbol)
+                        logger.info("Created analyzer for: %s", symbol)
 
                         
-                        #process the bar through the relevant analyzer
-                        #idea is to update the relevant analyzer object and return the results upon
-                        #each bar being processed. We can add thesese results to another dict with
-                        #each of the corresponding symbols and then have the alerts gen
-                        try:
-                           result = analyzerDict[symbol].process_bar(event)
-                        except Exception:
-                            logger.exception("Analysis failed for %s", symbol)
-                            continue
+                    #process the bar through the relevant analyzer
+                    #idea is to update the relevant analyzer object and return the results upon
+                    #each bar being processed. We can add thesese results to another dict with
+                    #each of the corresponding symbols and then have the alerts gen
+                    try:
+                        result = analyzerDict[symbol].process_bar(event)
+                           
+                    except Exception:
+                        logger.exception("Analysis failed for %s", symbol)
+                        continue
                         
+                    logger.info(event)
 
-                        strength = result["convergence"].get("signal_strength", "none")
+                    strength = result["convergence"].get("signal_strength", "none")
                         
-                        if strength in publish_threshold:
-                            notification_jobs.append(result)
-                            logger.info(
-                                "SIGNAL %s strength=%s dir=%s",
-                                symbol,
-                                strength,
-                                result["convergence"].get("ofi_direction")
-                            )
+                    if strength in publish_threshold:
+                        notification_jobs.append(result)
+                        logger.info(
+                            "SIGNAL %s strength=%s dir=%s",
+                             symbol,
+                            strength,
+                            result["convergence"].get("ofi_direction")
+                        )
+
+            await r.xack(bars_stream, group_name, msg_id)
                     
-                    if notification_jobs:
-                        await publish_jobs(bars_stream, notification_jobs)
+        if notification_jobs:
+            #temporary debugging logging statment
+            logging.info("Publishing jobs for bars")
+            await publish_jobs(bars_stream, notification_jobs)
                     
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)

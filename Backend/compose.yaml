@@ -75,6 +75,20 @@ services:
       - db
     restart: unless-stopped
 
+  detection_engine_worker:
+    build: . 
+    env_file:
+      - .env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+    command: ["uv", "run", "python", "-m", "app.workers.detection_engine_worker"]
+    volumes:
+      - ./app:/app/app
+      - ./detection_engine:/app/detection_engine
+    depends_on:
+      - redis
+    restart: unless-stopped
+
 volumes:
   moby_db_data:
   redis-data:

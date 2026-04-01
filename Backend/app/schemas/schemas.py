@@ -89,6 +89,21 @@ class AlpacaTrade(BaseModel):
     class Config:
         populate_by_name = True
 
+class AlpacaBar(BaseModel):
+    message_type : str = Field(alias="T")
+    symbol: str = Field(alias="S")
+    open: float = Field(alias="o")
+    high: float = Field(alias="h")
+    low: float = Field(alias="l")
+    close: float = Field(alias="c")
+    volume: int = Field(alias="v")
+    vwap : float = Field(alias="vw")
+    n : int = Field(alias="n")
+    timestamp: datetime = Field(alias="t")
+
+    class Config:
+        populate_by_name = True
+
 # user authentication begin
 class UserRegister(PostBase):
     email: EmailStr

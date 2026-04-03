@@ -3,6 +3,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
+from app.core.security import get_current_user
+
 import datetime as dt
 from app.schemas.schemas import (
     CreateAlert as CreateAlertSchema,
@@ -18,9 +20,11 @@ from app.models.models import (
 
 router = APIRouter(prefix="/alerts", tags=["alerts"])
 
-
 @router.post("/create_alert", response_model=AlertResponseSchema)
-async def create_alert(alert_in: CreateAlertSchema, db: AsyncSession = Depends(get_db)) -> Any:
+async def create_alert(
+    alert_in: CreateAlertSchema, 
+    db: AsyncSession = Depends(get_db),
+    user_id: int = Depends(get_current_user)) -> Any:
     # Get or create asset
     result = await db.execute(
         select(AssetORM).where(AssetORM.symbol == alert_in.asset_symbol)
@@ -64,7 +68,10 @@ async def create_alert(alert_in: CreateAlertSchema, db: AsyncSession = Depends(g
 
 
 @router.get("/list", response_model=List[AlertResponseSchema])
-async def list_alerts(user_id: int, db: AsyncSession = Depends(get_db)) -> Any:
+async def list_alerts(
+    user_id: int = Depends(get_current_user), 
+    db: AsyncSession = Depends(get_db),
+    ) -> Any:
     result = await db.execute(
         select(AlertORM, AssetORM.symbol, AlertTypeORM.name)
         .join(AssetORM, AlertORM.asset_id == AssetORM.id)
@@ -90,7 +97,7 @@ async def list_alerts(user_id: int, db: AsyncSession = Depends(get_db)) -> Any:
 
 @router.get("/alert_history", response_model=List[AlertHistoryResponseSchema])
 async def get_alert_history(
-    user_id: int,
+    user_id: int = Depends(get_current_user),
     limit: int = 20,
     db: AsyncSession = Depends(get_db)
 ) -> Any:
@@ -127,7 +134,11 @@ async def get_alert_history(
 
 
 @router.delete("/delete_alert/{alert_id}", status_code=204)
-async def delete_alert(alert_id: int, db: AsyncSession = Depends(get_db)):
+async def delete_alert(
+    alert_id: int, 
+    db: AsyncSession = Depends(get_db),
+    user_id: int = Depends(get_current_user)
+    ):
     result = await db.execute(
         select(AlertORM).where(AlertORM.id == alert_id)
     )

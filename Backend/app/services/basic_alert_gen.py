@@ -12,7 +12,6 @@ async def trade_size_comparison(trade: AlpacaTrade, db: AsyncSession, logger):
     if trade.size < 1:
         return []
 
-    logger.info("generating alert ...")
     stmt = (
         select(AlertORM)
         .join(AssetORM, AlertORM.asset_id == AssetORM.id)

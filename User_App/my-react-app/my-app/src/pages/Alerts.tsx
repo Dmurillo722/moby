@@ -62,7 +62,7 @@ function DetailField({
 }
 
 const Alerts = () => {
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const userId = user?.id;
   const [alerts, setAlerts] = useState<AlertHistoryItem[]>([]);
   const [selected, setSelected] = useState<AlertHistoryItem | null>(null);
@@ -76,7 +76,8 @@ const Alerts = () => {
       try {
         setLoading(true);
         setError(null);
-        const data = await getAlertHistory(userId);
+        if (!token) return;
+        const data = await getAlertHistory(token);
         if (cancelled) return;
         const arr = Array.isArray(data) ? data : [];
         setAlerts(arr);

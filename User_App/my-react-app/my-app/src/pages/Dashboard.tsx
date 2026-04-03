@@ -39,7 +39,7 @@ const newsCache = new Map<string, CompanyNewsItem[]>();
 const sentimentCache = new Map<string, InsiderSentimentResponse>();
 
 const Dashboard = () => {
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const userId = user?.id;
   const { symbols } = useWatchlist();
   const [marketNews, setMarketNews] = useState<MarketNewsItem[]>([]);
@@ -84,7 +84,8 @@ const Dashboard = () => {
     try {
       setAlertsLoading(true);
       setAlertsError(null);
-      const data = await getAlertHistory(userId);
+      if (!token) return;
+      const data = await getAlertHistory(token);
       setRecentAlerts(Array.isArray(data) ? data : []);
     } catch (e: unknown) {
       setAlertsError(e instanceof Error ? e.message : "Failed to load alerts");

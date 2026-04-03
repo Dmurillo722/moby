@@ -35,12 +35,14 @@ class RollingVolumeTracker:
         return self.total_volume
     
 
-    def trim_timeframe(self):
+    def trim_timeframe(self, current_time = datetime.now(timezone.utc)):
         """
         Trim off the data from time that has fallen out of the desired timeframe (form the left)
         """
         #define a cutoff by subtracting desired timeframe from the current time
-        cutoff = datetime.now(timezone.utc) - timedelta(minutes=self.window_minutes)
+        #have default value for current time, however, it is better to use latest 
+        #bar time as the current time to avoid any issues with latency in the data feed
+        cutoff = current_time - timedelta(minutes=self.window_minutes)
         #while there is still data in the deque of bars and 
         while self.bars and self.bars[0]["t"] < cutoff:
             old = self.bars.popleft()

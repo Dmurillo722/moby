@@ -35,35 +35,54 @@ export type CreateAlertPayload = {
 const BASE = "http://localhost:8000";
 
 export async function getAlertHistory(
-  userId: number,
+  token: string,
   limit = 20,
 ): Promise<AlertHistoryItem[]> {
-  const response = await fetch(
-    `${BASE}/alerts/alert_history?user_id=${userId}&limit=${limit}`,
-  );
+  console.log("TOKEN BEING SENT:", token);
+  const response = await fetch(`${BASE}/alerts/alert_history?limit=${limit}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
   if (!response.ok) throw new Error(await response.text());
   return response.json();
 }
 
-export async function listAlerts(userId: number): Promise<AlertConfig[]> {
-  const response = await fetch(`${BASE}/alerts/list?user_id=${userId}`);
+export async function listAlerts(token: string): Promise<AlertConfig[]> {
+  const response = await fetch(`${BASE}/alerts/list`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
   if (!response.ok) throw new Error(await response.text());
   return response.json();
 }
 
-export async function createAlert(payload: CreateAlertPayload): Promise<AlertConfig> {
+export async function createAlert(
+  payload: CreateAlertPayload,
+  token: string,
+): Promise<AlertConfig> {
   const response = await fetch(`${BASE}/alerts/create_alert`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
     body: JSON.stringify(payload),
   });
   if (!response.ok) throw new Error(await response.text());
   return response.json();
 }
 
-export async function deleteAlert(alertId: number): Promise<void> {
+export async function deleteAlert(
+  alertId: number,
+  token: string,
+): Promise<void> {
   const response = await fetch(`${BASE}/alerts/delete_alert/${alertId}`, {
     method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
   });
   if (!response.ok) throw new Error(await response.text());
 }

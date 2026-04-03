@@ -24,7 +24,7 @@ const CreateAlertModal = ({
   onClose: () => void;
   onCreated: () => void;
 }) => {
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const userId = user?.id;
   const [alertType, setAlertType] = useState<AlertTypeName>("size");
   const [threshold, setThreshold] = useState("");
@@ -40,17 +40,21 @@ const CreateAlertModal = ({
       setError("Enter a valid threshold");
       return;
     }
+    if (!token) return;
     try {
       setLoading(true);
       setError(null);
-      await createAlert({
-        user_id: userId!,
-        asset_symbol: symbol,
-        alert_type: alertType,
-        threshold: thr,
-        email,
-        sms,
-      });
+      await createAlert(
+        {
+          user_id: userId!,
+          asset_symbol: symbol,
+          alert_type: alertType,
+          threshold: thr,
+          email,
+          sms,
+        },
+        token,
+      );
       setSuccess(true);
       onCreated();
       setTimeout(onClose, 1000);
@@ -273,7 +277,7 @@ const SymbolCard = ({
 };
 
 const Watchlists = () => {
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const userId = user?.id;
   const { symbols, addSymbol, removeSymbol } = useWatchlist();
   const [input, setInput] = useState("");
@@ -284,7 +288,8 @@ const Watchlists = () => {
   const fetchAlerts = useCallback(async () => {
     if (!userId) return;
     try {
-      const data = await listAlerts(userId);
+      if (!token) return;
+      const data = await listAlerts(token);
       setAlertConfigs(Array.isArray(data) ? data : []);
     } catch (e) {
       console.error("[alerts] failed to load alert configs", e);
@@ -296,8 +301,9 @@ const Watchlists = () => {
   }, [fetchAlerts]);
 
   const handleDeleteAlert = async (id: number) => {
+    if (!token) return;
     try {
-      await deleteAlert(id);
+      await deleteAlert(id, token);
       setAlertConfigs((prev) => prev.filter((a) => a.id !== id));
     } catch (e) {
       console.error("[alerts] failed to delete alert", e);

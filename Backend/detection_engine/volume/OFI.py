@@ -9,6 +9,7 @@ class OFI_equities:
     def __init__(self, window_minutes=5):
         self.window_minutes= window_minutes
         self.trades=deque()
+        self.quotes=deque()
         self.trade_count = 0
         self.buy_count = 0
         self.sell_count = 0
@@ -20,6 +21,24 @@ class OFI_equities:
     
     def current_trade_count(self):
         return self.trade_count
+    
+    def classify_trade(self, trade):
+        #classify the trade as a buy or sell based on the price movement
+        
+        #if trade price is > than midpoint -> buyer initiated
+
+        #if trade price is < than midpoint -> seller initiated
+
+        #if trade price is = to midpoint -> indeterminate, fall 
+        #back to tick rule and compare to previous trade price
+        #Uptick = buyer initiated, Downtick = seller initiated
+        #unchanged = carry forward the previous classification
+        
+        
+        if trade["p"] > trade["o"]:
+            self.buy_count += 1
+        elif trade["p"] < trade["o"]:
+            self.sell_count += 1
 
     
     def trim_timeframe(self):

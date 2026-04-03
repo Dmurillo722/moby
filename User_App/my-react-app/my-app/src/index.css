@@ -56,4 +56,14 @@
     background-color: hsl(var(--background));
     color: hsl(var(--foreground));
   }
+
+  input, select, textarea {
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+    border-color: hsl(var(--border));
+  }
+
+  input::placeholder, textarea::placeholder {
+    color: hsl(var(--muted-foreground));
+  }
 }

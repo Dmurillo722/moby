@@ -1,236 +1,158 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
+import React, { useState, useEffect, useCallback } from "react";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { useAuth } from "@/context/AuthContext";
+import { X, Plus, Bell, Trash2 } from "lucide-react";
+import MiniChart from "@/components/MiniChart";
+import { useWatchlist } from "@/context/WatchlistContext";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/Table";
-import { Badge } from "@/components/ui/Badge";
-import { Button } from "@/components/ui/Button";
-import { getMarketNews } from "@/endpoint_connections/news_endpoint";
-import { getAlertHistory, createAlert } from "@/endpoint_connections/alerts_endpoint";
-import { ExternalLink } from "lucide-react";
+  createAlert,
+  listAlerts,
+  deleteAlert,
+} from "@/endpoint_connections/alerts_endpoint";
+import type { AlertConfig } from "@/endpoint_connections/alerts_endpoint";
+import { ALERT_TYPE_OPTIONS } from "@/lib/types";
+import type { AlertTypeName } from "@/lib/types";
 
-type MarketNewsItem = {
-  headline?: string;
-  source?: string;
-  url?: string;
-  datetime?: number;
-  summary?: string;
-};
-
-type AlertHistoryItem = {
-  id: number;
-  alert_id: number;
-  confidence: number;
-  sent: string;
-};
-
-function timeAgoFromUnixSeconds(unix?: number) {
-  if (!unix) return "";
-  const ms = unix * 1000;
-  const diff = Date.now() - ms;
-  const mins = Math.floor(diff / 60000);
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  const days = Math.floor(hrs / 24);
-  return `${days}d ago`;
-}
-
-function timeFromIso(sentIso?: string) {
-  if (!sentIso) return "";
-  const d = new Date(sentIso);
-  return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-}
-
-function confidenceLabel(conf?: number) {
-  if (typeof conf !== "number") return "—";
-  if (conf >= 0.75) return "High";
-  if (conf >= 0.5) return "Medium";
-  return "Low";
-}
-
-const Dashboard = () => {
-  const watchedSymbols: Array<{
-    symbol: string;
-    lastPrice: number;
-    volume: string;
-    change: number;
-    changePercent: number;
-  }> = [];
-
-  const [marketNews, setMarketNews] = useState<MarketNewsItem[]>([]);
-  const [marketNewsLoading, setMarketNewsLoading] = useState(false);
-  const [marketNewsError, setMarketNewsError] = useState<string | null>(null);
-
-  const [recentAlerts, setRecentAlerts] = useState<AlertHistoryItem[]>([]);
-  const [alertsLoading, setAlertsLoading] = useState(false);
-  const [alertsError, setAlertsError] = useState<string | null>(null);
-
-  const userId = 1;
-
-  const [assetSymbol, setAssetSymbol] = useState("");
-  const [alertType, setAlertType] = useState("size");
+const CreateAlertModal = ({
+  symbol,
+  onClose,
+  onCreated,
+}: {
+  symbol: string;
+  onClose: () => void;
+  onCreated: () => void;
+}) => {
+  const { user, token } = useAuth();
+  const userId = user?.id;
+  const [alertType, setAlertType] = useState<AlertTypeName>("size");
   const [threshold, setThreshold] = useState("");
   const [email, setEmail] = useState(true);
   const [sms, setSms] = useState(false);
-  const [createLoading, setCreateLoading] = useState(false);
-  const [createError, setCreateError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
 
-  const watchSymbolsList = useMemo(
-    () => watchedSymbols.map((s) => s.symbol.toUpperCase()),
-    [watchedSymbols]
-  );
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function load() {
-      try {
-        setMarketNewsLoading(true);
-        setMarketNewsError(null);
-
-        const data = await getMarketNews("general");
-        if (cancelled) return;
-
-        setMarketNews(Array.isArray(data) ? (data as MarketNewsItem[]) : []);
-      } catch (e: any) {
-        if (cancelled) return;
-        setMarketNewsError(e?.message ?? "Failed to load market news");
-        setMarketNews([]);
-      } finally {
-        if (!cancelled) setMarketNewsLoading(false);
-      }
+  const onSubmit = async () => {
+    const thr = Number(threshold);
+    if (!Number.isFinite(thr) || thr <= 0) {
+      setError("Enter a valid threshold");
+      return;
     }
-
-    load();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function loadAlerts() {
-      try {
-        setAlertsLoading(true);
-        setAlertsError(null);
-        const data = await getAlertHistory(userId);
-        if (cancelled) return;
-        setRecentAlerts(Array.isArray(data) ? (data as AlertHistoryItem[]) : []);
-      } catch (e: any) {
-        if (cancelled) return;
-        setAlertsError(e?.message ?? "Failed to load alerts");
-        setRecentAlerts([]);
-      } finally {
-        if (!cancelled) setAlertsLoading(false);
-      }
-    }
-
-    loadAlerts();
-    return () => {
-      cancelled = true;
-    };
-  }, [userId]);
-
-  const refreshAlerts = async () => {
+    if (!token) return;
     try {
-      setAlertsLoading(true);
-      setAlertsError(null);
-      const data = await getAlertHistory(userId);
-      setRecentAlerts(Array.isArray(data) ? (data as AlertHistoryItem[]) : []);
-    } catch (e: any) {
-      setAlertsError(e?.message ?? "Failed to load alerts");
-      setRecentAlerts([]);
+      setLoading(true);
+      setError(null);
+      await createAlert(
+        {
+          user_id: userId!,
+          asset_symbol: symbol,
+          alert_type: alertType,
+          threshold: thr,
+          email,
+          sms,
+        },
+        token,
+      );
+      setSuccess(true);
+      onCreated();
+      setTimeout(onClose, 1000);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Failed to create alert");
     } finally {
-      setAlertsLoading(false);
-    }
-  };
-
-  const onCreateAlert = async () => {
-    try {
-      setCreateLoading(true);
-      setCreateError(null);
-
-      const sym = assetSymbol.trim().toUpperCase();
-      const thr = Number(threshold);
-
-      if (!sym) throw new Error("Asset symbol is required");
-      if (!Number.isFinite(thr)) throw new Error("Threshold must be a number");
-
-      await createAlert({
-        user_id: userId,
-        asset_symbol: sym,
-        alert_type: alertType,
-        threshold: thr,
-        email,
-        sms,
-      });
-
-      setAssetSymbol("");
-      setThreshold("");
-      await refreshAlerts();
-    } catch (e: any) {
-      setCreateError(e?.message ?? "Failed to create alert");
-    } finally {
-      setCreateLoading(false);
+      setLoading(false);
     }
   };
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight text-foreground">Dashboard</h1>
-      </div>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80"
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+    >
+      <div
+        className="w-full max-w-sm rounded-lg border border-border"
+        style={{ backgroundColor: "hsl(222.2, 84%, 4.3%)" }}
+      >
+        <div className="border-b border-border py-3 px-4 flex flex-row items-center justify-between">
+          <span className="text-base font-semibold text-foreground">
+            New alert — <span className="font-mono">{symbol}</span>
+          </span>
+          <button
+            onClick={onClose}
+            className="text-muted-foreground hover:text-foreground"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 space-y-6">
-          <Card className="border-border">
-            <CardHeader className="border-b border-border bg-card">
-              <CardTitle className="text-lg font-semibold text-foreground">Create Alert</CardTitle>
-            </CardHeader>
-            <CardContent className="p-6 space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div className="space-y-1">
-                  <div className="text-xs text-muted-foreground">Symbol</div>
-                  <input
-                    value={assetSymbol}
-                    onChange={(e) => setAssetSymbol(e.target.value)}
-                    className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-                    placeholder="AAPL"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <div className="text-xs text-muted-foreground">Type</div>
-                  <select
-                    value={alertType}
-                    onChange={(e) => setAlertType(e.target.value)}
-                    className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-                  >
-                    <option value="size">size</option>
-
-                  </select>
-                </div>
-
-                <div className="space-y-1">
-                  <div className="text-xs text-muted-foreground">Threshold</div>
-                  <input
-                    value={threshold}
-                    onChange={(e) => setThreshold(e.target.value)}
-                    className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-                    placeholder="100"
-                  />
+        <div className="p-5 space-y-4">
+          {success ? (
+            <p className="text-sm text-emerald-500 text-center py-2">
+              Alert created!
+            </p>
+          ) : (
+            <>
+              <div className="space-y-2">
+                <div className="text-xs text-muted-foreground">Alert type</div>
+                <div className="space-y-2">
+                  {ALERT_TYPE_OPTIONS.map((opt) => (
+                    <label
+                      key={opt.value}
+                      className={`flex items-start gap-3 rounded-md border p-3 cursor-pointer transition-colors ${
+                        !opt.available
+                          ? "opacity-40 cursor-not-allowed border-border"
+                          : alertType === opt.value
+                            ? "border-primary bg-accent/30"
+                            : "border-border hover:bg-accent/20"
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="alertType"
+                        value={opt.value}
+                        checked={alertType === opt.value}
+                        disabled={!opt.available}
+                        onChange={() => setAlertType(opt.value)}
+                        className="mt-0.5"
+                      />
+                      <div>
+                        <div className="text-sm font-medium text-foreground flex items-center gap-2">
+                          {opt.label}
+                          {!opt.available && (
+                            <Badge
+                              variant="outline"
+                              className="text-xs px-1.5 py-0"
+                            >
+                              Soon
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="text-xs text-muted-foreground mt-0.5">
+                          {opt.description}
+                        </div>
+                      </div>
+                    </label>
+                  ))}
                 </div>
               </div>
 
-              <div className="flex flex-wrap items-center gap-4">
-                <label className="flex items-center gap-2 text-sm text-foreground">
+              <div className="space-y-1">
+                <div className="text-xs text-muted-foreground">
+                  Threshold (shares)
+                </div>
+                <input
+                  value={threshold}
+                  onChange={(e) => setThreshold(e.target.value)}
+                  className="w-full rounded-md border border-border bg-background text-foreground px-3 py-2 text-sm"
+                  placeholder="e.g. 500"
+                  type="number"
+                  min="1"
+                />
+              </div>
+
+              <div className="flex items-center gap-4">
+                <label className="flex items-center gap-2 text-sm text-foreground cursor-pointer">
                   <input
                     type="checkbox"
                     checked={email}
@@ -239,7 +161,7 @@ const Dashboard = () => {
                   />
                   Email
                 </label>
-                <label className="flex items-center gap-2 text-sm text-foreground">
+                <label className="flex items-center gap-2 text-sm text-foreground cursor-pointer">
                   <input
                     type="checkbox"
                     checked={sms}
@@ -248,166 +170,221 @@ const Dashboard = () => {
                   />
                   SMS
                 </label>
-
-                <Button onClick={onCreateAlert} disabled={createLoading} variant="secondary">
-                  {createLoading ? "Creating…" : "Create Alert"}
-                </Button>
-
-                {createError ? <span className="text-xs text-red-500">{createError}</span> : null}
               </div>
-            </CardContent>
-          </Card>
 
-          <Card className="border-border">
-            <CardHeader className="border-b border-border bg-card flex flex-row items-center justify-between">
-              <CardTitle className="text-lg font-semibold text-foreground">
-                Recent Alert
-                {alertsLoading ? <span className="ml-2 text-xs text-muted-foreground font-normal">Loading…</span> : null}
-                {alertsError ? <span className="ml-2 text-xs text-red-500 font-normal">{alertsError}</span> : null}
-              </CardTitle>
+              {error && <p className="text-xs text-red-500">{error}</p>}
 
-              <Button onClick={refreshAlerts} disabled={alertsLoading} variant="secondary">
-                {alertsLoading ? "Loading…" : "Refresh Alerts"}
+              <Button
+                onClick={onSubmit}
+                disabled={loading}
+                className="w-full"
+                variant="secondary"
+              >
+                {loading ? "Creating…" : "Create Alert"}
               </Button>
-            </CardHeader>
-
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-muted/50 hover:bg-muted/50 border-border">
-                    <TableHead className="text-muted-foreground font-semibold">Time</TableHead>
-                    <TableHead className="text-muted-foreground font-semibold">Alert ID</TableHead>
-                    <TableHead className="text-muted-foreground font-semibold">Confidence</TableHead>
-                    <TableHead className="text-muted-foreground font-semibold">View</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {recentAlerts.map((event) => {
-                    const label = confidenceLabel(event.confidence);
-
-                    return (
-                      <TableRow key={event.id} className="hover:bg-accent/50 transition-colors border-border">
-                        <TableCell className="font-medium text-muted-foreground">{timeFromIso(event.sent)}</TableCell>
-                        <TableCell>
-                          <span className="font-semibold text-foreground">{event.alert_id}</span>
-                        </TableCell>
-                        <TableCell>
-                          <Badge
-                            variant="outline"
-                            className={
-                              label === "High"
-                                ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20"
-                                : label === "Medium"
-                                  ? "bg-amber-500/10 text-amber-500 border-amber-500/20"
-                                  : label === "Low"
-                                    ? "bg-red-500/10 text-red-500 border-red-500/20"
-                                    : "bg-muted/50 border-border"
-                            }
-                          >
-                            {label}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Button variant="ghost" size="sm" className="h-8 text-muted-foreground hover:text-foreground">
-                            <ExternalLink className="w-4 h-4" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-
-                  {!alertsLoading && recentAlerts.length === 0 && !alertsError ? (
-                    <TableRow>
-                      <TableCell colSpan={4} className="text-sm text-muted-foreground py-6 text-center">
-                        No alert history returned.
-                      </TableCell>
-                    </TableRow>
-                  ) : null}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-
-          <Card className="border-border">
-            <CardHeader className="border-b border-border bg-card flex flex-row items-center justify-between">
-              <CardTitle className="text-lg font-semibold text-foreground">Watched Symbols Activity</CardTitle>
-              <Button disabled variant="secondary">
-                Refresh News/Sentiment
-              </Button>
-            </CardHeader>
-
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-muted/50 hover:bg-muted/50 border-border">
-                    <TableHead className="text-muted-foreground font-semibold">Symbol</TableHead>
-                    <TableHead className="text-muted-foreground font-semibold">Last Price</TableHead>
-                    <TableHead className="text-muted-foreground font-semibold">Volume</TableHead>
-                    <TableHead className="text-muted-foreground font-semibold">Insider</TableHead>
-                    <TableHead className="text-muted-foreground font-semibold">Top News</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {watchSymbolsList.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={5} className="text-sm text-muted-foreground py-6 text-center">
-                        No watched symbols yet.
-                      </TableCell>
-                    </TableRow>
-                  ) : null}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        </div>
-
-        <div className="space-y-6">
-          <Card className="border-border">
-            <CardHeader className="border-b border-border bg-card">
-              <CardTitle className="text-lg font-semibold text-foreground">
-                Daily News
-                {marketNewsLoading ? <span className="ml-2 text-xs text-muted-foreground font-normal">Loading…</span> : null}
-                {marketNewsError ? <span className="ml-2 text-xs text-red-500 font-normal">{marketNewsError}</span> : null}
-              </CardTitle>
-            </CardHeader>
-
-            <CardContent className="p-4">
-              <div className="space-y-4">
-                {(marketNews ?? []).slice(0, 8).map((news, index) => {
-                  const title = news.headline ?? "Untitled";
-                  const source = news.source ?? "Unknown";
-                  const time = timeAgoFromUnixSeconds(news.datetime);
-                  const url = news.url ?? "#";
-
-                  return (
-                    <div
-                      key={index}
-                      className="group cursor-pointer pb-4 border-b border-border last:border-0 last:pb-0 hover:bg-accent/30 -mx-4 px-4 py-3 rounded-lg transition-colors"
-                    >
-                      <a href={url} target="_blank" rel="noreferrer" className="block">
-                        <h3 className="font-semibold text-sm text-foreground leading-snug group-hover:text-primary transition-colors">
-                          {title}
-                        </h3>
-                        <div className="flex items-center gap-2 mt-2">
-                          <span className="text-xs text-muted-foreground font-medium">{source}</span>
-                          {time ? <span className="text-xs text-muted-foreground/50">•</span> : null}
-                          {time ? <span className="text-xs text-muted-foreground">{time}</span> : null}
-                        </div>
-                      </a>
-                    </div>
-                  );
-                })}
-
-                {!marketNewsLoading && marketNews.length === 0 && !marketNewsError ? (
-                  <div className="text-sm text-muted-foreground">No market news returned.</div>
-                ) : null}
-              </div>
-            </CardContent>
-          </Card>
+            </>
+          )}
         </div>
       </div>
     </div>
   );
 };
 
-export default Dashboard;
+const SymbolCard = ({
+  symbol,
+  exchange,
+  allAlerts,
+  onOpenAlertModal,
+  onRemoveSymbol,
+  onDeleteAlert,
+}: {
+  symbol: string;
+  exchange: string;
+  allAlerts: AlertConfig[];
+  onOpenAlertModal: (symbol: string) => void;
+  onRemoveSymbol: (symbol: string) => void;
+  onDeleteAlert: (id: number) => void;
+}) => {
+  const symbolAlerts = allAlerts.filter((a) => a.asset_symbol === symbol);
+
+  return (
+    <Card className="border-border overflow-hidden">
+      <CardHeader className="border-b border-border bg-card py-3 px-4 flex flex-row items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="font-bold font-mono text-foreground">{symbol}</span>
+          <Badge variant="outline" className="text-xs text-muted-foreground">
+            {exchange}
+          </Badge>
+        </div>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => onOpenAlertModal(symbol)}
+            className="p-1.5 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+            title="Create alert"
+          >
+            <Bell className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => onRemoveSymbol(symbol)}
+            className="p-1.5 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+            title="Remove symbol"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      </CardHeader>
+
+      <CardContent className="p-0">
+        <MiniChart symbol={symbol} exchange={exchange} />
+
+        {symbolAlerts.length > 0 && (
+          <div className="border-t border-border px-4 py-3 space-y-2">
+            <div className="text-xs text-muted-foreground uppercase tracking-wide">
+              Active Alerts
+            </div>
+            {symbolAlerts.map((alert) => (
+              <div
+                key={alert.id}
+                className="flex items-center justify-between py-1.5 px-3 rounded-md bg-muted/30 border border-border"
+              >
+                <div className="flex items-center gap-2 text-sm">
+                  <Badge variant="outline" className="text-xs font-mono px-1.5">
+                    {alert.alert_type}
+                  </Badge>
+                  <span className="text-foreground font-mono">
+                    &gt; {alert.threshold?.toLocaleString() ?? "—"}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {[alert.email && "Email", alert.sms && "SMS"]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </span>
+                </div>
+                <button
+                  onClick={() => onDeleteAlert(alert.id)}
+                  className="p-1 rounded hover:bg-red-500/10 text-muted-foreground hover:text-red-500 transition-colors"
+                  title="Delete alert"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+};
+
+const Watchlists = () => {
+  const { user, token } = useAuth();
+  const userId = user?.id;
+  const { symbols, addSymbol, removeSymbol } = useWatchlist();
+  const [input, setInput] = useState("");
+  const [inputError, setInputError] = useState<string | null>(null);
+  const [alertTarget, setAlertTarget] = useState<string | null>(null);
+  const [alertConfigs, setAlertConfigs] = useState<AlertConfig[]>([]);
+
+  const fetchAlerts = useCallback(async () => {
+    if (!userId) return;
+    try {
+      if (!token) return;
+      const data = await listAlerts(token);
+      setAlertConfigs(Array.isArray(data) ? data : []);
+    } catch (e) {
+      console.error("[alerts] failed to load alert configs", e);
+    }
+  }, [userId]);
+
+  useEffect(() => {
+    fetchAlerts();
+  }, [fetchAlerts]);
+
+  const handleDeleteAlert = async (id: number) => {
+    if (!token) return;
+    try {
+      await deleteAlert(id, token);
+      setAlertConfigs((prev) => prev.filter((a) => a.id !== id));
+    } catch (e) {
+      console.error("[alerts] failed to delete alert", e);
+    }
+  };
+
+  const handleAdd = () => {
+    const { error } = addSymbol(input);
+    if (error) {
+      setInputError(error);
+    } else {
+      setInput("");
+      setInputError(null);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") handleAdd();
+  };
+
+  return (
+    <div className="space-y-6">
+      {alertTarget && (
+        <CreateAlertModal
+          symbol={alertTarget}
+          onClose={() => setAlertTarget(null)}
+          onCreated={fetchAlerts}
+        />
+      )}
+
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight text-foreground">
+            Watchlists
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            {symbols.length} symbol{symbols.length !== 1 ? "s" : ""} tracked
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <input
+            value={input}
+            onChange={(e) => {
+              setInput(e.target.value);
+              setInputError(null);
+            }}
+            onKeyDown={handleKeyDown}
+            className="w-28 rounded-md border border-border bg-background text-foreground px-3 py-2 text-sm uppercase placeholder:normal-case"
+            placeholder="Symbol"
+          />
+          <Button onClick={handleAdd} variant="secondary" size="sm">
+            <Plus className="w-4 h-4 mr-1" />
+            Add
+          </Button>
+        </div>
+      </div>
+
+      {inputError && <p className="text-sm text-red-500 -mt-4">{inputError}</p>}
+
+      {symbols.length === 0 ? (
+        <div className="flex items-center justify-center h-48 text-sm text-muted-foreground border border-dashed border-border rounded-lg">
+          Add a symbol above to get started.
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {symbols.map(({ symbol, exchange }) => (
+            <SymbolCard
+              key={symbol}
+              symbol={symbol}
+              exchange={exchange}
+              allAlerts={alertConfigs}
+              onOpenAlertModal={setAlertTarget}
+              onRemoveSymbol={removeSymbol}
+              onDeleteAlert={handleDeleteAlert}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default Watchlists;

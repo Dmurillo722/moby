@@ -1,8 +1,10 @@
 from typing import Any, List
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
+from app.core.security import get_current_user
+
 import datetime as dt
 from app.schemas.schemas import (
     CreateAlert as CreateAlertSchema,
@@ -18,17 +20,21 @@ from app.models.models import (
 
 router = APIRouter(prefix="/alerts", tags=["alerts"])
 
-@router.post(f"/create_alert", response_model=AlertResponseSchema)
-async def create_alert(alert_in: CreateAlertSchema, db: AsyncSession = Depends(get_db)) -> Any:
-    # Retrieve the asset from databse
+@router.post("/create_alert", response_model=AlertResponseSchema)
+async def create_alert(
+    alert_in: CreateAlertSchema, 
+    db: AsyncSession = Depends(get_db),
+    user_id: int = Depends(get_current_user)) -> Any:
+    # Get or create asset
     result = await db.execute(
         select(AssetORM).where(AssetORM.symbol == alert_in.asset_symbol)
     )
     asset = result.scalar_one_or_none()
     if not asset:
-        raise HTTPException(status_code=404, detail="Asset Symbol Not Found")
+        asset = AssetORM(symbol=alert_in.asset_symbol)
+        db.add(asset)
+        await db.flush()
 
-    # alert type
     result = await db.execute(
         select(AlertTypeORM).where(AlertTypeORM.name == alert_in.alert_type)
     )
@@ -60,44 +66,83 @@ async def create_alert(alert_in: CreateAlertSchema, db: AsyncSession = Depends(g
         sms=alert.sms,
     )
 
-# returns alert history by user id
-@router.get("/alert_history", response_model=List[AlertHistoryResponseSchema])
-async def get_alert_history(user_id: int, db: AsyncSession = Depends(get_db)) -> Any:
+
+@router.get("/list", response_model=List[AlertResponseSchema])
+async def list_alerts(
+    user_id: int = Depends(get_current_user), 
+    db: AsyncSession = Depends(get_db),
+    ) -> Any:
     result = await db.execute(
-        select(AlertORM.id).where(AlertORM.user_id == user_id)
+        select(AlertORM, AssetORM.symbol, AlertTypeORM.name)
+        .join(AssetORM, AlertORM.asset_id == AssetORM.id)
+        .join(AlertTypeORM, AlertORM.alert_type_id == AlertTypeORM.id)
+        .where(AlertORM.user_id == user_id)
+        .order_by(desc(AlertORM.id))
     )
-    alert_ids = result.scalars().all()
-    if not alert_ids:
-        return []
+    rows = result.all()
+    return [
+        AlertResponseSchema(
+            id=alert.id,
+            user_id=alert.user_id,
+            asset_id=alert.asset_id,
+            asset_symbol=symbol,
+            alert_type=alert_type_name,
+            threshold=alert.threshold,
+            email=alert.email,
+            sms=alert.sms,
+        )
+        for alert, symbol, alert_type_name in rows
+    ]
+
+
+@router.get("/alert_history", response_model=List[AlertHistoryResponseSchema])
+async def get_alert_history(
+    user_id: int = Depends(get_current_user),
+    limit: int = 20,
+    db: AsyncSession = Depends(get_db)
+) -> Any:
     result = await db.execute(
-        select(AlertEventHistoryORM).where(AlertEventHistoryORM.alert_id.in_(alert_ids))
-                                           .order_by(desc(AlertEventHistoryORM.sent))
-                                           .limit(3)
-    );
+        select(AlertEventHistoryORM)
+        .join(AlertORM, AlertEventHistoryORM.alert_id == AlertORM.id)
+        .where(AlertORM.user_id == user_id)
+        .order_by(desc(AlertEventHistoryORM.sent))
+        .limit(limit)
+    )
     history = result.scalars().all()
     if not history:
         return []
-    result = []
+
+    out = []
     for event in history:
         sent = event.sent
         if sent is not None and sent.tzinfo is None:
             sent = sent.replace(tzinfo=dt.timezone.utc)
-        result.append(AlertHistoryResponseSchema(
+        out.append(AlertHistoryResponseSchema(
             id=event.id,
             alert_id=event.alert_id,
-            confidence=event.confidence,
-            sent=sent
+            sent=sent,
+            symbol=event.symbol,
+            price=event.price,
+            size=event.size,
+            exchange=event.exchange,
+            trade_id=event.trade_id,
+            conditions=event.conditions,
+            tape=event.tape,
+            trade_timestamp=event.trade_timestamp,
         ))
-    return result
+    return out
 
-# delete alert based on alert_id, propogates to alert history
+
 @router.delete("/delete_alert/{alert_id}", status_code=204)
-async def delete_alert(alert_id: int, db: AsyncSession = Depends(get_db)):
+async def delete_alert(
+    alert_id: int, 
+    db: AsyncSession = Depends(get_db),
+    user_id: int = Depends(get_current_user)
+    ):
     result = await db.execute(
         select(AlertORM).where(AlertORM.id == alert_id)
     )
     item = result.scalar_one_or_none()
-
     if not item:
         raise HTTPException(status_code=404, detail="Alert with this ID does not exist")
 

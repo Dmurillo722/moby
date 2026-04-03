@@ -111,7 +111,19 @@ class AlertEventHistory(Base):
     alert_id: Mapped[int] = mapped_column(Integer, nullable=False)
     confidence: Mapped[str] = mapped_column(String(256), nullable=False)
     sent: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, server_default=text('now()'))
+
+    symbol: Mapped[Optional[str]] = mapped_column(String(16))
+    price: Mapped[Optional[float]] = mapped_column(Double(53))
+    size: Mapped[Optional[int]] = mapped_column(Integer)
+    exchange: Mapped[Optional[str]] = mapped_column(String(8))
+    trade_id: Mapped[Optional[int]] = mapped_column(Integer)
+    conditions: Mapped[Optional[str]] = mapped_column(String(256))  
+    tape: Mapped[Optional[str]] = mapped_column(String(4))
+    trade_timestamp: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime)
+    
     alert: Mapped['Alert'] = relationship('Alert', back_populates='alert_event_history')
+
+
 
 class FinancialOverview(Base):
     __tablename__ = 'financial_overview'

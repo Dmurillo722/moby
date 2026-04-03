@@ -5,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.schemas.schemas import UserRegister, UserLogin
+from app.schemas.schemas import UserRegister, UserLogin, UserResponse
 from app.models.models import Users
 from app.core.security import hash_password, verify_password, create_access_token
 
@@ -44,10 +44,7 @@ async def register(user: UserRegister, db: AsyncSession = Depends(get_db)) -> An
     await db.commit()
     await db.refresh(new_user)
 
-    return {
-        "message": "User registered successfully",
-        "user_id": new_user.id
-    }
+    return UserResponse(id = new_user.id, email = new_user.email, name = new_user.name, phone = new_user.phone)
 
 
 # user login
@@ -75,13 +72,15 @@ async def login(user: UserLogin, db: AsyncSession = Depends(get_db)) -> Any:
 
     # generate JWT token
     token = create_access_token({
-        "user_id": db_user.id,
-        "email": db_user.email
+        "sub": str(db_user.id)
     })
 
     return {
         "access_token": token,
         "token_type": "bearer",
-        "user_id": db_user.id
+        "user_id": db_user.id,
+        "email": db_user.email,
+        "name": db_user.name,
+        "phone": db_user.phone
     }
 

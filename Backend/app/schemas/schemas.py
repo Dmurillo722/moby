@@ -70,8 +70,15 @@ class AlertResponseSchema(ResponseBase):
 class AlertHistoryResponseSchema(ResponseBase):
     id: int
     alert_id: int
-    confidence: str
     sent: datetime
+    symbol: Optional[str] = None
+    price: Optional[float] = None
+    size: Optional[int] = None
+    exchange: Optional[str] = None
+    trade_id: Optional[int] = None
+    conditions: Optional[str] = None
+    tape: Optional[str] = None
+    trade_timestamp: Optional[datetime] = None
 
 # basic schema representation for an individual trade for now
 # might want to break out these schemas to a different file for non api validation stuff

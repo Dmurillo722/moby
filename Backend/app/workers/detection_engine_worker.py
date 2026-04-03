@@ -7,8 +7,11 @@ from app.core.database import AsyncSessionLocal, get_redis
 import logging
 from app.schemas.schemas import AlpacaBar
 from redis.exceptions import RedisError, ResponseError
+from app.services.loki_handler import LokiHandler, JsonFormatter
 from app.core.database import get_redis
 from detection_engine.volume.analyzer import SymbolAnalyzer, default_analyzer
+
+
 
 """
 Pure analysis process meant to read bars, run analysis, and publish signals that meet some determined threshold. 
@@ -16,6 +19,22 @@ This worker won't interact with the database, instead just consuming bar data an
 """
 
 logger = logging.getLogger("detection")
+logger.setLevel(logging.INFO)
+
+formatter = JsonFormatter()
+console_handler = logging.StreamHandler()
+console_handler.setFormatter(formatter)
+logger.addHandler(console_handler)
+
+loki_handler = LokiHandler(
+    loki_url="http://localhost:3100",
+    labels={"app": "detection", "env": "dev"}
+)
+loki_handler.setFormatter(formatter)
+logger.addHandler(loki_handler)
+
+logger.info("Detection worker started.")
+
 bars_stream = "moby:bars"
 signals_stream = "moby:signals"
 group_name = "detection-group"

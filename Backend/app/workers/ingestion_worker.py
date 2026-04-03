@@ -6,9 +6,25 @@ from app.core.config import settings
 from app.core.database import get_redis, AsyncSessionLocal
 from app.models.models import Asset as AssetORM
 from sqlalchemy import select
+from app.services.loki_handler import LokiHandler, JsonFormatter
 
 logger = logging.getLogger("ingest")
+logger.setLevel(logging.INFO)
 trades_stream = "moby:trades"
+
+formatter = JsonFormatter()
+console_handler = logging.StreamHandler()
+console_handler.setFormatter(formatter)
+logger.addHandler(console_handler)
+
+loki_handler = LokiHandler(
+    loki_url="http://localhost:3100",
+    labels={"app": "ingest", "env": "dev"}
+)
+loki_handler.setFormatter(formatter)
+logger.addHandler(loki_handler)
+
+logger.info("Ingest worker started.")
 
 
 async def get_symbols_from_db() -> list[str]:

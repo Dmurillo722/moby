@@ -5,8 +5,26 @@ from contextlib import asynccontextmanager
 from app.api.main import api_router
 from fastapi.middleware.cors import CORSMiddleware
 import logging
+from app.services.loki_handler import LokiHandler, JsonFormatter
 
 logger = logging.getLogger("uvicorn")
+logger.setLevel(logging.INFO)
+
+formatter = JsonFormatter()
+
+console_handler = logging.StreamHandler()
+console_handler.setFormatter(formatter)
+logger.addHandler(console_handler)
+
+loki_handler = LokiHandler(
+    loki_url="http://loki:3100",
+    labels={"app": "fastapi", "env": "dev"}
+)
+loki_handler.setFormatter(formatter)
+logger.addHandler(loki_handler)
+
+logger.info("FastAPI service started.")
+
 
 # lifespan, sets up consumer to get data from alpaca and write to redis stream
 @asynccontextmanager
@@ -34,6 +52,7 @@ app.add_middleware(
 # boilerplate health check
 @app.get("/health", tags=["health"])
 async def health_check():
+    logger.info("Health Check")
     return {"status": "ok"}
 
 # attaching routers

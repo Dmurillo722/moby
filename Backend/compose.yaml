@@ -14,6 +14,26 @@ services:
       - db
     restart: unless-stopped
 
+  loki:
+    image: grafana/loki:2.9.4
+    container_name: loki
+    ports:
+      - "3100:3100"
+    command: -config.file=/etc/loki/local-config.yaml
+    volumes:
+      - ./loki-config.yaml:/etc/loki/local-config.yaml
+
+  grafana:
+    image: grafana/grafana:10.2.3
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    depends_on:
+      - loki
+
   redis:
     image: redis:7
     container_name: moby-redis
@@ -76,12 +96,13 @@ services:
     restart: unless-stopped
 
   detection_engine_worker:
-    build: . 
+    build: .
     env_file:
       - .env
     environment:
       REDIS_URL: redis://redis:6379/0
-    command: ["uv", "run", "python", "-m", "app.workers.detection_engine_worker"]
+    command:
+      ["uv", "run", "python", "-m", "app.workers.detection_engine_worker"]
     volumes:
       - ./app:/app/app
       - ./detection_engine:/app/detection_engine

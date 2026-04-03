@@ -8,9 +8,25 @@ import smtplib
 from redis.exceptions import ResponseError
 from email.message import EmailMessage
 from app.core.config import settings
+from app.services.loki_handler import LokiHandler, JsonFormatter
 from datetime import datetime
 
-logger = logging.getLogger("eval")
+logger = logging.getLogger("notification")
+logger.setLevel(logging.INFO)
+
+formatter = JsonFormatter()
+console_handler = logging.StreamHandler()
+console_handler.setFormatter(formatter)
+logger.addHandler(console_handler)
+
+loki_handler = LokiHandler(
+    loki_url="http://localhost:3100",
+    labels={"app": "notification", "env": "dev"}
+)
+loki_handler.setFormatter(formatter)
+logger.addHandler(loki_handler)
+
+logger.info("notification worker started.")
 notify_stream = "moby:notifications"
 group_name = "notify-group"
 

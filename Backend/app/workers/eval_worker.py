@@ -3,11 +3,28 @@ from redis.exceptions import ResponseError
 import json
 import asyncio
 import logging
+from app.services.loki_handler import LokiHandler, JsonFormatter
 from app.core.database import get_redis
 from app.core.database import AsyncSessionLocal
 from app.services.basic_alert_gen import trade_size_comparison
 
 logger = logging.getLogger("eval")
+logger.setLevel(logging.INFO)
+
+formatter = JsonFormatter()
+console_handler = logging.StreamHandler()
+console_handler.setFormatter(formatter)
+logger.addHandler(console_handler)
+
+loki_handler = LokiHandler(
+    loki_url="http://localhost:3100",
+    labels={"app": "eval", "env": "dev"}
+)
+loki_handler.setFormatter(formatter)
+logger.addHandler(loki_handler)
+
+logger.info("Eval worker started.")
+
 trades_stream = "moby:trades"
 notify_stream = "moby:notifications"
 group_name = "eval-group"

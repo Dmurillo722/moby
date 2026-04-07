@@ -6,7 +6,8 @@ from app.api.routes import finances
 from app.api.routes import alerts
 from app.api.routes import news
 from app.api.routes import sentiment
-from app.api.routes import auth  
+from app.api.routes import auth
+from app.api.routes import signals
 
 api_router = APIRouter()
 
@@ -14,5 +15,6 @@ api_router.include_router(finances.router)
 api_router.include_router(alerts.router)
 api_router.include_router(news.router)
 api_router.include_router(sentiment.router)
-api_router.include_router(auth.router)  
+api_router.include_router(auth.router)
+api_router.include_router(signals.router)
 

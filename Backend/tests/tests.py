@@ -1,1 +1,0 @@
-# build this out into multiple folders for diffent kinds of tests auth, mock email tests etc. 

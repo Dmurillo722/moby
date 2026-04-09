@@ -1,4 +1,6 @@
 import json
+from jinja2 import Template
+from pathlib import Path
 from app.models.models import AlertEventHistory
 import asyncio
 import logging
@@ -78,7 +80,6 @@ async def main(consumer_name: str = "notify-1"):
                                 conditions=",".join(job.get("conditions") or []),
                                 tape=job.get("tape"),
                                 trade_timestamp=datetime.fromisoformat(job["trade_timestamp"]).replace(tzinfo=None) if job.get("trade_timestamp") else None,
-
                             )
                             db.add(ah)
                         except Exception:
@@ -86,14 +87,36 @@ async def main(consumer_name: str = "notify-1"):
 
                         if job.get("email_flag") is True:
                             try:
+                                template_path = Path(__file__).parent / "../templates/template1.html"
+                                with open(template_path, encoding="utf-8") as f:
+                                    template = Template(f.read())
+                                    
+                                template_data = {
+                                    "symbol": job.get('symbol'),
+                                    "trade_size": job.get('size'),      
+                                    "confidence": "High",
+                                    "custom_message": f"Abnormal trade activity detected!"
+                                }
+                                
+                                html_content = template.render(**template_data)
+
                                 msg = EmailMessage()
                                 msg["Subject"] = "Moby Alert"
                                 msg["From"] = "clientmoby@gmail.com"
                                 msg["To"] = job["user_email"]
                                 msg.set_content(
-                                    f"Moby possible whale activity detected for {job.get('symbol')}, "
-                                    f"trade with size: {job.get('size')} exceeding threshold ... (etc)"
+                                    f"""
+                                    Moby Alert
+
+                                    Abnormal trade activity detected for {template_data['symbol']}
+
+                                    Trade Size: {template_data['trade_size']}
+                                    Confidence: {template_data['confidence']}
+
+                                    {template_data['custom_message']}
+                                    """
                                 )
+                                msg.add_alternative(html_content, subtype="html")
                                 s.send_message(msg)
                             except Exception:
                                 logger.exception(

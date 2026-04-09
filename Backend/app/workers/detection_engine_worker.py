@@ -89,6 +89,7 @@ async def main(consumer_name: str = "detection-1"):
 
         #resp is a list of tuples [(stream_name, [(msg_id, {field: value})])]
         for _, messages in resp:
+            logger.info("HERE IN THE DETECTION ENGINE")
             #messages is a list of tuples [(msg_id, {field: value})]
             for msg_id, fields in messages:
             #payload is a json string defining the bar, parse it for bar data

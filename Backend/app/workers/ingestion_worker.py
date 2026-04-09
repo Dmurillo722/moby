@@ -57,13 +57,19 @@ async def main():
                     "key": settings.ALPACA_API_KEY,
                     "secret": settings.ALPACA_API_SECRET,
                 }))
+                auth_response = await asyncio.wait_for(ws.recv(), timeout=10)
+                logger.info("Alpaca auth response: %s", auth_response)
+
                 await ws.send(json.dumps({
                     "action": "subscribe",
                     "trades": symbols_trades,
                     "quotes": symbols_quotes,
                     "bars": symbols_bars,
                 }))
-                logger.info("Subscription success, receiving data from Alpaca")
+
+                subscribe_response = await asyncio.wait_for(ws.recv(), timeout=10)
+                logger.info("Alpaca subscribe response: %s", subscribe_response)
+
                 async for message in ws:
                     await r.xadd(
                         trades_stream,
@@ -73,7 +79,7 @@ async def main():
                     )
 
         except Exception:
-            logger.error("Problem connecting to Alpaca, retrying momentarily...")
+            logger.exception("Problem connecting to Alpaca, retrying momentarily")
             retry_count -= 1
             if not retry_count:
                 logger.error("Unrecoverable issue connecting to Alpaca, aborting")

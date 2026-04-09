@@ -11,6 +11,12 @@ from app.services.loki_handler import LokiHandler, JsonFormatter
 logger = logging.getLogger("ingest")
 logger.setLevel(logging.INFO)
 trades_stream = "moby:trades"
+bars_stream = "moby:bars"
+
+stream_routing = {
+    "t": trades_stream,
+    "b": bars_stream
+}
 
 formatter = JsonFormatter()
 console_handler = logging.StreamHandler()
@@ -44,7 +50,8 @@ async def main():
 
     symbols_trades = await get_symbols_from_db()
     symbols_quotes: list[str] = []
-    symbols_bars: list[str] = []
+    symbols_bars = await get_symbols_from_db()
+    #list[str] = []
 
     logger.info("Connecting to Alpaca, subscribing to: %s", symbols_trades)
 
@@ -65,12 +72,26 @@ async def main():
                 }))
                 logger.info("Subscription success, receiving data from Alpaca")
                 async for message in ws:
-                    await r.xadd(
-                        trades_stream,
-                        {"payload": message},
-                        maxlen=200_000,
-                        approximate=True,
-                    )
+
+                    events = json.loads(message)
+                    if not isinstance(events, list):
+                        events = [events]
+                    
+                    for event in events:
+                        msg_type = event.get("T")
+                        if msg_type == 'b':#bars
+                            logger.info("Received bar event: %s", event)
+                            await r.xadd(bars_stream, {"payload": json.dumps(event)}, maxlen=200_000, approximate=True)
+                        elif msg_type == 't':#trades
+                            logger.info("Received trade event: %s", event)
+                            await r.xadd(trades_stream, {"payload": json.dumps([event])}, maxlen=200_000, approximate=True)
+                    
+                        #await r.xadd(
+                        ##    trades_stream,
+                        #    {"payload": message},
+                        #    maxlen=200_000,
+                        #    approximate=True,
+                        #)
 
         except Exception:
             logger.error("Problem connecting to Alpaca, retrying momentarily...")

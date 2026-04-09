@@ -57,6 +57,7 @@ async def main(consumer_name: str = "eval-1"):
         if not resp:
             continue
 
+        
         for _, messages in resp:
             for msg_id, fields in messages:
                 payload = fields['payload']

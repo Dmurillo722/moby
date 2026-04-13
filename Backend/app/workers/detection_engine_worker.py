@@ -153,7 +153,7 @@ async def main(consumer_name: str = "detection-1"):
         if notification_jobs:
             #temporary debugging logging statment
             logging.info("Publishing jobs for bars")
-            await publish_jobs(bars_stream, notification_jobs)
+            await publish_jobs(r, notification_jobs)
                     
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)

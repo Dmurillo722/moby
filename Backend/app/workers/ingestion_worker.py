@@ -83,7 +83,7 @@ async def main():
                             logger.info("Received bar event: %s", event)
                             await r.xadd(bars_stream, {"payload": json.dumps(event)}, maxlen=200_000, approximate=True)
                         elif msg_type == 't':#trades
-                            logger.info("Received trade event: %s", event)
+                            #logger.info("Received trade event: %s", event)
                             await r.xadd(trades_stream, {"payload": json.dumps([event])}, maxlen=200_000, approximate=True)
                     
                         #await r.xadd(
